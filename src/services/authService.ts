@@ -1,4 +1,5 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -24,7 +25,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status;
     const message = error.response?.data?.message || error.message;
+
+    if (status === 429) {
+      toast.error('Too many requests. Please slow down and try again in a moment.', {
+        id: 'throttler-error', // Prevent duplicate toasts
+      });
+    }
+
     console.error(`[API Error]: ${message}`);
     return Promise.reject(error);
   }

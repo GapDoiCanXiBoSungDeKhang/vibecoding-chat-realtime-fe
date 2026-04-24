@@ -398,3 +398,78 @@ body {
     display: none;
   }
 }
+
+/* Contacts Styles */
+.contacts-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--bg-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.contacts-section {
+  padding: 24px;
+}
+
+.contacts-section h3 {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.contact-card {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  margin-bottom: 12px;
+  gap: 16px;
+  transition: var(--transition-smooth);
+}
+
+.contact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.contact-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--bg-tertiary);
+  background: white;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-icon:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.btn-icon.success:hover {
+  background: #e6fcf5;
+  border-color: #20c997;
+  color: #20c997;
+}
+
+.btn-icon.danger:hover {
+  background: #fff5f5;
+  border-color: #fa5252;
+  color: #fa5252;
+}
