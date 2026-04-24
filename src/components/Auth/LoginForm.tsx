@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 
 interface LoginFormProps {
   onToggleForm: () => void;
@@ -9,6 +10,7 @@ interface LoginFormProps {
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onSuccess }) => {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,7 +22,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm, onSuccess }) => {
     setError('');
     
     try {
-      await authService.login({ email, password });
+      const data = await authService.login({ email, password });
+      login(data.accessToken, data.refreshToken);
       toast.success('Login successful! Welcome back.');
       setIsLoading(false);
       onSuccess();

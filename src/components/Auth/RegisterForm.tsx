@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 
 interface RegisterFormProps {
   onToggleForm: () => void;

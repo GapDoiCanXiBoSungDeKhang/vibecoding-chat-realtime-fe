@@ -1,8 +1,12 @@
 import React from 'react'
-import AuthPage from './AuthPage'
+import AuthPage from './pages/AuthPage'
+import ChatPage from './pages/ChatPage'
 import { Toaster } from 'react-hot-toast'
+import { useAuth } from './context/AuthContext'
 
 function App() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="App">
       <Toaster 
@@ -18,7 +22,11 @@ function App() {
           },
         }} 
       />
-      <AuthPage />
+      {isAuthenticated ? (
+        <ChatPage />
+      ) : (
+        <AuthPage />
+      )}
     </div>
   )
 }

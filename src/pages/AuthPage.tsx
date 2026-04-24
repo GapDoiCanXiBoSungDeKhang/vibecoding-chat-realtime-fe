@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import LoginForm from './components/Auth/LoginForm';
-import RegisterForm from './components/Auth/RegisterForm';
+import LoginForm from '../components/Auth/LoginForm';
+import RegisterForm from '../components/Auth/RegisterForm';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AuthPage: React.FC = () => {
@@ -8,8 +8,7 @@ const AuthPage: React.FC = () => {
 
   const handleToggle = () => setIsLogin(!isLogin);
   const handleSuccess = () => {
-    alert(isLogin ? 'Logged in successfully!' : 'Registered successfully!');
-    // Redirect logic would go here
+    // State is handled by AuthContext globally
   };
 
   return (
