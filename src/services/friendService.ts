@@ -25,4 +25,14 @@ export const friendService = {
     const response = await api.delete(`/friends/${userId}`);
     return response.data;
   },
+
+  async findByName(name: string) {
+    const response = await api.get(`/friends/find/name?q=${name}`);
+    return response.data;
+  },
+
+  async findByPhone(phone: string) {
+    const response = await api.get(`/friends/find/phone?q=${phone}`);
+    return response.data;
+  },
 };

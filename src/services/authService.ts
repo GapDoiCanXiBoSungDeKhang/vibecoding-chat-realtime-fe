@@ -21,19 +21,43 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle global error messages
+// Response interceptor to handle global error messages and exponential backoff
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const status = error.response?.status;
-    const message = error.response?.data?.message || error.message;
-
-    if (status === 429) {
-      toast.error('Too many requests. Please slow down and try again in a moment.', {
-        id: 'throttler-error', // Prevent duplicate toasts
+  async (error) => {
+    const { config, response } = error;
+    
+    // Only retry on 429 (Too Many Requests) and if we haven't reached max retries (5)
+    if (response?.status === 429) {
+      config._retryCount = config._retryCount || 0;
+      
+      if (config._retryCount < 5) {
+        config._retryCount += 1;
+        
+        // Calculate delay: 1s, 2s, 4s, 8s, 16s
+        const delay = Math.pow(2, config._retryCount - 1) * 1000;
+        
+        // Silent retry (no console.log or toast)
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return api(config);
+      }
+      
+      // Final failure notification after all retries exhausted
+      toast.error('Server is under heavy load. Please try again later.', {
+        id: 'throttler-final-error',
       });
     }
 
+    // Handle 401/403 Auth Errors for redirection
+    if (response?.status === 401 || response?.status === 403) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      // Use window.location to force a clean state redirect
+      window.location.href = '/';
+      return Promise.reject(error);
+    }
+
+    const message = response?.data?.message || error.message;
     console.error(`[API Error]: ${message}`);
     return Promise.reject(error);
   }
