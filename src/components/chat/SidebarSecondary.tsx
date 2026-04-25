@@ -8,6 +8,7 @@ interface SidebarSecondaryProps {
   isLoading: boolean;
   onSelectChat: (id: string) => void;
   activeChatId: string | null;
+  onCreateGroup?: () => void;
 }
 
 const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({ 
@@ -15,7 +16,8 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
   conversations, 
   isLoading, 
   onSelectChat,
-  activeChatId
+  activeChatId,
+  onCreateGroup
 }) => {
   return (
     <aside className="w-72 h-full bg-[#f7f7f7] border-r border-gray-200 flex flex-col flex-shrink-0 animate-in slide-in-from-left duration-300">
@@ -29,7 +31,11 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
             className="w-full pl-9 pr-3 py-1.5 bg-gray-200/60 rounded text-xs outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 transition-all border border-transparent focus:border-blue-200"
           />
         </div>
-        <button className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-all bg-white/50 border border-gray-200 shadow-sm">
+        <button 
+          onClick={onCreateGroup}
+          className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-all bg-white/50 border border-gray-200 shadow-sm"
+          title="Tạo nhóm"
+        >
           <Plus size={16} />
         </button>
       </div>

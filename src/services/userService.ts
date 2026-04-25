@@ -41,7 +41,7 @@ export const userService = {
   },
 
   async searchByPhone(phone: string) {
-    const response = await api.get(`/users/find/phone?phone=${phone}`);
+    const response = await api.get('/users/find/phone', { data: { phone } });
     return response.data;
   },
 

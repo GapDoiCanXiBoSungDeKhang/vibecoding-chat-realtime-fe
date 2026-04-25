@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, UserCheck, Check, X, UserMinus, Search, Filter, MoreHorizontal, Users } from 'lucide-react';
+import { UserPlus, UserCheck, Check, X, UserMinus, Search, Filter, MoreHorizontal, Users, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AddFriendModal from './AddFriendModal';
 import { friendService } from '../../services/friendService';
 
-const ContactsView: React.FC = () => {
+interface ContactsViewProps {
+  onStartChat?: (userId: string) => void;
+}
+
+const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -169,7 +173,10 @@ const ContactsView: React.FC = () => {
                     <div className="divide-y divide-gray-50">
                       {groupedFriends[letter].map((friend: any) => (
                         <div key={friend._id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors group">
-                          <div className="flex items-center gap-4">
+                          <div 
+                            className="flex items-center gap-4 cursor-pointer"
+                            onClick={() => onStartChat && onStartChat(friend._id)}
+                          >
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 flex items-center justify-center font-bold text-base shadow-sm group-hover:scale-105 transition-transform">
                               {friend.name?.charAt(0)}
                             </div>
@@ -179,6 +186,13 @@ const ContactsView: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => onStartChat && onStartChat(friend._id)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              title="Nhắn tin"
+                            >
+                              <MessageSquare size={20} />
+                            </button>
                             <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
                               <MoreHorizontal size={20} />
                             </button>
