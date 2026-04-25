@@ -3,14 +3,17 @@ import { MessageSquare, Send, Phone, Video, MoreVertical, Loader2 } from 'lucide
 import { messageService } from '../../services/messageService';
 import { conversationService } from '../../services/conversationService';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import Avatar from '../ui/Avatar';
 import toast from 'react-hot-toast';
+import { useMessageSocket } from '../../hooks/useMessageSocket';
 
 interface ChatAreaProps {
   activeChat: string | null;
+  onClose?: () => void;
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [conversationInfo, setConversationInfo] = useState<any>(null);
@@ -18,6 +21,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { isTyping, notifyTyping, stopTyping } = useMessageSocket({
+    activeChat,
+    currentUserId: user?.sub,
+    onNewMessage: (payload) => setMessages(prev => [...prev, payload]),
+    onConversationUpdate: () => fetchChatData()
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,7 +41,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isTyping]);
 
   const fetchChatData = async () => {
     setIsLoading(true);
@@ -41,7 +51,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
         messageService.getMessages(activeChat!, 50)
       ]);
       setConversationInfo(infoData);
-      // Backend typically returns older messages first or paginated. Assuming array format.
       setMessages(messagesData.messages || messagesData); 
     } catch (error) {
       toast.error('Không thể tải dữ liệu cuộc trò chuyện');
@@ -50,20 +59,70 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    notifyTyping();
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
+    stopTyping();
+
     setIsSending(true);
     try {
       const sentMsg = await messageService.sendMessage(activeChat, newMessage);
-      // Optimistically append message or re-fetch. Here we append:
-      setMessages(prev => [...prev, sentMsg]);
       setNewMessage('');
     } catch (error) {
       toast.error('Không thể gửi tin nhắn');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Calculate Header Info dynamically
+  const isPrivate = conversationInfo?.type === 'private';
+  let headerName = conversationInfo?.name;
+  if (isPrivate && conversationInfo?.participants) {
+    const other = conversationInfo.participants.find((p: any) => p.userId?._id !== user?.sub)?.userId;
+    headerName = other?.name || 'Người dùng';
+  }
+
+  const currentUserRole = conversationInfo?.participants?.find((p: any) => p.userId?._id === user?.sub)?.role;
+
+  const handleLeaveGroup = async () => {
+    try {
+      await conversationService.leaveGroup(user!.sub, user!.name, activeChat!);
+      toast.success('Đã rời khỏi nhóm');
+      setIsDropdownOpen(false);
+      onClose && onClose();
+    } catch (e) {
+      toast.error('Không thể rời nhóm');
+    }
+  };
+
+  const handleDisbandGroup = async () => {
+    try {
+      await conversationService.disbandGroup(user!.sub, activeChat!);
+      toast.success('Đã giải tán nhóm');
+      setIsDropdownOpen(false);
+      onClose && onClose();
+    } catch (e) {
+      toast.error('Không thể giải tán nhóm');
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    try {
+      await conversationService.removeConversation(activeChat!);
+      toast.success('Đã xóa trò chuyện');
+      setIsDropdownOpen(false);
+      onClose && onClose();
+    } catch (e) {
+      toast.error('Không thể xóa trò chuyện');
     }
   };
 
@@ -90,13 +149,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#e5efff]/30">
+    <div className="flex flex-col h-full bg-[#e5efff]/30 relative">
       {/* Header */}
-      <header className="h-16 px-6 bg-white border-b border-gray-200 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
+      <header className="h-16 px-6 bg-white border-b border-gray-200 flex items-center justify-between flex-shrink-0 shadow-sm z-10 relative">
         <div className="flex items-center gap-4">
-          <Avatar name={conversationInfo?.name || 'Chat'} size="md" />
+          <Avatar name={headerName || 'Chat'} size="md" />
           <div>
-            <h2 className="font-bold text-gray-900 text-base">{conversationInfo?.name || 'Đang tải...'}</h2>
+            <h2 className="font-bold text-gray-900 text-base">{headerName || 'Đang tải...'}</h2>
             <div className="text-xs text-green-500 font-medium">Vừa mới truy cập</div>
           </div>
         </div>
@@ -104,7 +163,53 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
           <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"><Phone size={20} /></button>
           <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"><Video size={20} /></button>
           <div className="w-px h-6 bg-gray-200 mx-1"></div>
-          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"><MoreVertical size={20} /></button>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <MoreVertical size={20} />
+            </button>
+            
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95">
+                {conversationInfo?.type === 'group' && (
+                  <>
+                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      Thêm thành viên
+                    </button>
+                    <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      Quản lý thành viên
+                    </button>
+                    <div className="h-px bg-gray-100 my-1"></div>
+                    <button 
+                      onClick={handleLeaveGroup}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Rời nhóm
+                    </button>
+                    {currentUserRole === 'owner' && (
+                      <button 
+                        onClick={handleDisbandGroup}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold transition-colors"
+                      >
+                        Giải tán nhóm
+                      </button>
+                    )}
+                  </>
+                )}
+                {isPrivate && (
+                  <button 
+                    onClick={handleDeleteChat}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Xóa trò chuyện
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -145,6 +250,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
             );
           })
         )}
+        {isTyping && (
+          <div className="flex w-full justify-start mt-2">
+            <div className="bg-white px-4 py-2 rounded-2xl shadow-sm border border-gray-100 flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -154,7 +268,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat }) => {
           <input 
             type="text" 
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Nhập tin nhắn tới bạn bè..." 
             className="flex-1 px-4 py-3 bg-gray-100 focus:bg-white rounded-xl border border-transparent focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[14px]"
             disabled={isSending}

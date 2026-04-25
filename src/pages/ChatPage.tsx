@@ -8,6 +8,9 @@ import SidebarPrimary from '../components/chat/SidebarPrimary';
 import SidebarSecondary from '../components/chat/SidebarSecondary';
 import ChatArea from '../components/chat/ChatArea';
 import CreateGroupModal from '../components/chat/CreateGroupModal';
+import { useSocket } from '../context/SocketContext';
+import { ChatLayout } from '../layouts/ChatLayout';
+import { useConversationSocket } from '../hooks/useConversationSocket';
 
 const ChatPage: React.FC = () => {
   const { logout, user } = useAuth();
@@ -17,10 +20,6 @@ const ChatPage: React.FC = () => {
   const [currentView, setCurrentView] = useState<'chats' | 'contacts'>('chats');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
-
-  useEffect(() => {
-    fetchConversations();
-  }, []);
 
   const fetchConversations = async () => {
     try {
@@ -32,6 +31,12 @@ const ChatPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  useConversationSocket(fetchConversations);
 
   const handleStartChat = async (userId: string) => {
     try {
@@ -52,47 +57,45 @@ const ChatPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden font-sans text-[14px]">
+    <ChatLayout
+      primarySidebar={
+        <SidebarPrimary 
+          user={user}
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onLogout={logout}
+          isSettingsOpen={isSettingsOpen}
+        />
+      }
+      secondarySidebar={
+        <SidebarSecondary 
+          currentView={currentView}
+          conversations={conversations}
+          isLoading={isLoading}
+          onSelectChat={(id) => {
+            setActiveChat(id);
+            setCurrentView('chats');
+          }}
+          activeChatId={activeChat}
+          onCreateGroup={() => setIsCreateGroupOpen(true)}
+          currentUserId={user?.sub || ''}
+        />
+      }
+    >
+      {/* Modals */}
+      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
+      {isCreateGroupOpen && <CreateGroupModal onClose={() => setIsCreateGroupOpen(false)} onSuccess={handleGroupCreated} />}
       
-      {/* 1. Primary Navigation Sidebar */}
-      <SidebarPrimary 
-        user={user}
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onLogout={logout}
-        isSettingsOpen={isSettingsOpen}
-      />
-
-      {/* 2. Secondary Context Sidebar */}
-      <SidebarSecondary 
-        currentView={currentView}
-        conversations={conversations}
-        isLoading={isLoading}
-        onSelectChat={(id) => {
-          setActiveChat(id);
-          setCurrentView('chats');
-        }}
-        activeChatId={activeChat}
-        onCreateGroup={() => setIsCreateGroupOpen(true)}
-      />
-
-      {/* 3. Main Content Area */}
-      <main className="flex-1 h-full relative bg-white flex flex-col overflow-hidden">
-        {/* Modals */}
-        {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
-        {isCreateGroupOpen && <CreateGroupModal onClose={() => setIsCreateGroupOpen(false)} onSuccess={handleGroupCreated} />}
-        
-        {/* Dynamic Views */}
-        {currentView === 'contacts' ? (
-          <div className="flex-1 overflow-y-auto animate-in fade-in slide-in-from-right-2 duration-400">
-            <ContactsView onStartChat={handleStartChat} />
-          </div>
-        ) : (
-          <ChatArea activeChat={activeChat} />
-        )}
-      </main>
-    </div>
+      {/* Dynamic Views */}
+      {currentView === 'contacts' ? (
+        <div className="flex-1 overflow-y-auto animate-in fade-in slide-in-from-right-2 duration-400">
+          <ContactsView onStartChat={handleStartChat} />
+        </div>
+      ) : (
+        <ChatArea activeChat={activeChat} onClose={() => setActiveChat(null)} />
+      )}
+    </ChatLayout>
   );
 };
 

@@ -3,6 +3,8 @@ import { UserPlus, UserCheck, Check, X, UserMinus, Search, Filter, MoreHorizonta
 import toast from 'react-hot-toast';
 import AddFriendModal from './AddFriendModal';
 import { friendService } from '../../services/friendService';
+import { useSocket } from '../../context/SocketContext';
+import { useFriendSocket } from '../../hooks/useFriendSocket';
 
 interface ContactsViewProps {
   onStartChat?: (userId: string) => void;
@@ -14,10 +16,6 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -34,6 +32,12 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useFriendSocket(fetchData);
 
   const handleRespond = async (id: string, action: 'accepted' | 'rejected') => {
     try {
