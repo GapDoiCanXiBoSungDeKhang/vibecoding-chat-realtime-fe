@@ -8,9 +8,11 @@ import SidebarPrimary from '../components/chat/SidebarPrimary';
 import SidebarSecondary from '../components/chat/SidebarSecondary';
 import ChatArea from '../components/chat/ChatArea';
 import CreateGroupModal from '../components/chat/CreateGroupModal';
+import CreatePrivateChatModal from '../components/chat/CreatePrivateChatModal';
 import { useSocket } from '../context/SocketContext';
 import { ChatLayout } from '../layouts/ChatLayout';
 import { useConversationSocket } from '../hooks/useConversationSocket';
+import { useFriendSocket } from '../hooks/useFriendSocket';
 
 const ChatPage: React.FC = () => {
   const { logout, user } = useAuth();
@@ -20,6 +22,7 @@ const ChatPage: React.FC = () => {
   const [currentView, setCurrentView] = useState<'chats' | 'contacts'>('chats');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isCreatePrivateOpen, setIsCreatePrivateOpen] = useState(false);
 
   const fetchConversations = async () => {
     try {
@@ -37,6 +40,17 @@ const ChatPage: React.FC = () => {
   }, []);
 
   useConversationSocket(fetchConversations);
+
+  // Global friend socket: show notifications anywhere in the app.
+  // If user A's request is accepted, refresh conversations and open the new chat.
+  useFriendSocket({
+    onUpdate: fetchConversations,
+    onAccepted: async (conversationId) => {
+      await fetchConversations();
+      setActiveChat(conversationId);
+      setCurrentView('chats');
+    },
+  });
 
   const handleStartChat = async (userId: string) => {
     try {
@@ -79,6 +93,7 @@ const ChatPage: React.FC = () => {
           }}
           activeChatId={activeChat}
           onCreateGroup={() => setIsCreateGroupOpen(true)}
+          onCreatePrivate={() => setIsCreatePrivateOpen(true)}
           currentUserId={user?.sub || ''}
         />
       }
@@ -86,6 +101,17 @@ const ChatPage: React.FC = () => {
       {/* Modals */}
       {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
       {isCreateGroupOpen && <CreateGroupModal onClose={() => setIsCreateGroupOpen(false)} onSuccess={handleGroupCreated} />}
+      {isCreatePrivateOpen && (
+        <CreatePrivateChatModal
+          onClose={() => setIsCreatePrivateOpen(false)}
+          onSuccess={async (convId) => {
+            setIsCreatePrivateOpen(false);
+            await fetchConversations();
+            setActiveChat(convId);
+            setCurrentView('chats');
+          }}
+        />
+      )}
       
       {/* Dynamic Views */}
       {currentView === 'contacts' ? (

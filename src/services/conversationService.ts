@@ -62,12 +62,12 @@ export const conversationService = {
     return response.data;
   },
 
-  async leaveGroup(id: string) {
+  async leaveGroup(id: string, name: any, p0: string) {
     const response = await api.delete(`/conversations/${id}/members/leave`);
     return response.data;
   },
 
-  async disbandGroup(id: string) {
+  async disbandGroup(id: string, p0: string) {
     const response = await api.delete(`/conversations/${id}/disband`);
     return response.data;
   },

@@ -24,7 +24,7 @@ export const messageService = {
   },
 
   // Delete a message
-  async deleteMessage(roomId: string, messageId: string, scope: 'all' | 'me' = 'all') {
+  async deleteMessage(roomId: string, messageId: string, scope: 'everyone' | 'self' = 'everyone') {
     const response = await api.delete(`/messages/${roomId}?scope=${scope}`, {
       data: { id: messageId }
     });

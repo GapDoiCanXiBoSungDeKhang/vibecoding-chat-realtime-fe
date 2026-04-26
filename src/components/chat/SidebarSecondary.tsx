@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, MessageCircle, Users as UsersIcon, LogOut, Trash2 } from 'lucide-react';
+import { Search, MessageCircle, Users as UsersIcon, LogOut, Trash2 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import { conversationService } from '../../services/conversationService';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ interface SidebarSecondaryProps {
   onSelectChat: (id: string) => void;
   activeChatId: string | null;
   onCreateGroup?: () => void;
+  onCreatePrivate?: () => void;
   currentUserId: string;
 }
 
@@ -21,6 +22,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
   onSelectChat,
   activeChatId,
   onCreateGroup,
+  onCreatePrivate,
   currentUserId
 }) => {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, conv: any } | null>(null);
@@ -65,13 +67,22 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
             className="w-full pl-9 pr-3 py-1.5 bg-gray-200/60 rounded text-xs outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 transition-all border border-transparent focus:border-blue-200"
           />
         </div>
-        <button 
-          onClick={onCreateGroup}
-          className="p-1.5 hover:bg-gray-200 rounded text-gray-600 transition-all bg-white/50 border border-gray-200 shadow-sm"
-          title="Tạo nhóm"
-        >
-          <Plus size={16} />
-        </button>
+        <div className="flex gap-1">
+          <button 
+            onClick={onCreatePrivate}
+            className="p-1.5 hover:bg-blue-100 rounded text-blue-600 transition-all bg-white/50 border border-gray-200 shadow-sm"
+            title="Nhắn tin mới"
+          >
+            <MessageCircle size={15} />
+          </button>
+          <button 
+            onClick={onCreateGroup}
+            className="p-1.5 hover:bg-blue-100 rounded text-blue-600 transition-all bg-white/50 border border-gray-200 shadow-sm"
+            title="Tạo nhóm"
+          >
+            <UsersIcon size={15} />
+          </button>
+        </div>
       </div>
 
       {/* List Content */}

@@ -3,7 +3,6 @@ import { UserPlus, UserCheck, Check, X, UserMinus, Search, Filter, MoreHorizonta
 import toast from 'react-hot-toast';
 import AddFriendModal from './AddFriendModal';
 import { friendService } from '../../services/friendService';
-import { useSocket } from '../../context/SocketContext';
 import { useFriendSocket } from '../../hooks/useFriendSocket';
 
 interface ContactsViewProps {
@@ -37,15 +36,19 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
     fetchData();
   }, []);
 
-  useFriendSocket(fetchData);
+  useFriendSocket({ onUpdate: fetchData });
 
   const handleRespond = async (id: string, action: 'accepted' | 'rejected') => {
     try {
       await friendService.respondToRequest(id, action);
-      toast.success(`Request ${action}`);
+      if (action === 'accepted') {
+        toast.success('Đã chấp nhận lời mời kết bạn 🎉');
+      } else {
+        toast('Đã từ chối lời mời kết bạn', { icon: '👋' });
+      }
       fetchData();
     } catch (error) {
-      toast.error('Action failed');
+      toast.error('Thao tác thất bại');
     }
   };
 
