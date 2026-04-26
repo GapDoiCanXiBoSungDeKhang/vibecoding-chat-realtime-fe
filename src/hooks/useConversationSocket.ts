@@ -7,16 +7,27 @@ export const useConversationSocket = (onUpdate: () => void) => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('group_created', onUpdate);
-    socket.on('group_added', onUpdate);
-    socket.on('group_removed', onUpdate);
-    socket.on('group_left_self', onUpdate);
+    const events = [
+      'group_created',
+      'group_added',
+      'group_removed',
+      'group_left_self',
+      'group_dissolved',
+      'group_request_added',
+      'new_message',
+      'new_message_file',
+      'new_message_media',
+      'message_seen'
+    ];
+
+    events.forEach(event => {
+      socket.on(event, onUpdate);
+    });
 
     return () => {
-      socket.off('group_created', onUpdate);
-      socket.off('group_added', onUpdate);
-      socket.off('group_removed', onUpdate);
-      socket.off('group_left_self', onUpdate);
+      events.forEach(event => {
+        socket.off(event, onUpdate);
+      });
     };
   }, [socket, onUpdate]);
 };

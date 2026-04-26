@@ -18,10 +18,39 @@ export const useMessageSocket = ({ activeChat, currentUserId, onNewMessage, onCo
       joinConversation(activeChat);
 
       if (socket) {
-        socket.on('new_message', (payload) => {
-          if (payload.conversationId === activeChat) {
-            onNewMessage(payload);
-          }
+        const messageArrivalEvents = [
+          'new_message',
+          'new_message_file',
+          'new_message_media',
+          'new_message_voice',
+          'new_message_linkPreview',
+          'new_message_call',
+          'message_system_room'
+        ];
+
+        messageArrivalEvents.forEach(evt => {
+          socket.on(evt, (payload) => {
+            if (payload.conversationId === activeChat) {
+              onNewMessage(payload);
+            }
+          });
+        });
+
+        const messageModificationEvents = [
+          'message_edited',
+          'message_deleted',
+          'message_reacted',
+          'message_pinned',
+          'message_unpinned',
+          'announcement_created'
+        ];
+
+        messageModificationEvents.forEach(evt => {
+          socket.on(evt, (payload) => {
+            if (payload.conversationId === activeChat) {
+              onConversationUpdate();
+            }
+          });
         });
 
         socket.on('user_typing', (payload) => {
@@ -42,10 +71,14 @@ export const useMessageSocket = ({ activeChat, currentUserId, onNewMessage, onCo
           }
         };
 
-        socket.on('group_member_added', handleGroupUpdate);
-        socket.on('group_member_removed', handleGroupUpdate);
-        socket.on('group_member_left', handleGroupUpdate);
-        socket.on('group_role_changed', handleGroupUpdate);
+        const groupEvents = [
+          'group_member_added',
+          'group_member_removed',
+          'group_member_left',
+          'group_role_changed'
+        ];
+
+        groupEvents.forEach(evt => socket.on(evt, handleGroupUpdate));
       }
     }
 
@@ -53,13 +86,15 @@ export const useMessageSocket = ({ activeChat, currentUserId, onNewMessage, onCo
       if (activeChat) {
         leaveConversation(activeChat);
         if (socket) {
-          socket.off('new_message');
-          socket.off('user_typing');
-          socket.off('user_stopped_typing');
-          socket.off('group_member_added');
-          socket.off('group_member_removed');
-          socket.off('group_member_left');
-          socket.off('group_role_changed');
+          const allEvents = [
+            'new_message', 'new_message_file', 'new_message_media', 'new_message_voice', 
+            'new_message_linkPreview', 'new_message_call', 'message_system_room',
+            'message_edited', 'message_deleted', 'message_reacted', 'message_pinned', 
+            'message_unpinned', 'announcement_created',
+            'user_typing', 'user_stopped_typing',
+            'group_member_added', 'group_member_removed', 'group_member_left', 'group_role_changed'
+          ];
+          allEvents.forEach(evt => socket.off(evt));
         }
       }
     };
