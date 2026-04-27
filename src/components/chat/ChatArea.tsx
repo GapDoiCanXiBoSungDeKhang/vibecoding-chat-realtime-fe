@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Phone, Video, MoreVertical, Loader2, Image, File, Mic, Smile, Reply, Edit2, Trash2, Forward, Pin, X, Check } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, Loader2, Image, File, Mic, Smile, Reply, Edit2, Trash2, Forward, Pin, X, Check, Info } from 'lucide-react';
 import { messageService } from '../../services/messageService';
 import { conversationService } from '../../services/conversationService';
 import { useAuth } from '../../context/AuthContext';
@@ -7,13 +7,13 @@ import Avatar from '../ui/Avatar';
 import toast from 'react-hot-toast';
 import { useMessageSocket } from '../../hooks/useMessageSocket';
 
-interface ChatAreaProps { activeChat: string | null; onClose?: () => void; }
+interface ChatAreaProps { activeChat: string | null; onClose?: () => void; onOpenInfo?: () => void; }
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
 const formatTime = (d: string) => d ? new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
 
-const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [conversationInfo, setConversationInfo] = useState<any>(null);
@@ -178,9 +178,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose }) => {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"><Phone size={18} /></button>
-          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"><Video size={18} /></button>
+          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors" title="Gọi thoại"><Phone size={18} /></button>
+          <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors" title="Gọi video"><Video size={18} /></button>
           <div className="w-px h-5 bg-gray-200 mx-1" />
+          <button onClick={onOpenInfo} className="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors" title="Thông tin"><Info size={18} /></button>
           <div className="relative">
             <button onClick={e => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full"><MoreVertical size={18} /></button>
             {isDropdownOpen && (

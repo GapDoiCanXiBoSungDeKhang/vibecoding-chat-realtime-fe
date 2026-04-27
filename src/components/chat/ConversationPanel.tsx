@@ -1,0 +1,389 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X, User, Image as ImageIcon, File, Link, Users, Pin,
+  ChevronRight, Download, ExternalLink, Loader2, Bell, BellOff,
+  Shield, UserMinus, LogOut, Trash2
+} from 'lucide-react';
+import { conversationService } from '../../services/conversationService';
+import Avatar from '../ui/Avatar';
+import toast from 'react-hot-toast';
+
+type Tab = 'info' | 'media' | 'file' | 'link' | 'members' | 'pins';
+
+interface ConversationPanelProps {
+  conversationId: string;
+  conversationInfo: any;
+  currentUserId: string;
+  onClose: () => void;
+  onConversationAction?: () => void;
+}
+
+const ConversationPanel: React.FC<ConversationPanelProps> = ({
+  conversationId,
+  conversationInfo,
+  currentUserId,
+  onClose,
+  onConversationAction,
+}) => {
+  const [tab, setTab] = useState<Tab>('info');
+  const [media, setMedia] = useState<any[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
+  const [pins, setPins] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Backend returns { year: { month: [items] } } — flatten it to a plain array
+  const flattenHashTable = (data: any): any[] => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    const result: any[] = [];
+    for (const year of Object.values(data)) {
+      if (year && typeof year === 'object') {
+        for (const monthItems of Object.values(year as Record<string, any>)) {
+          if (Array.isArray(monthItems)) result.push(...monthItems);
+        }
+      }
+    }
+    return result;
+  };
+
+  const isGroup = conversationInfo?.type === 'group';
+  const isPrivate = conversationInfo?.type === 'private';
+  const currentRole = conversationInfo?.participants?.find(
+    (p: any) => (p.userId?._id || p.userId) === currentUserId
+  )?.role;
+  const isOwner = currentRole === 'owner';
+  const isAdmin = currentRole === 'admin' || isOwner;
+
+  const otherUser = isPrivate
+    ? conversationInfo?.participants?.find((p: any) => (p.userId?._id || p.userId) !== currentUserId)?.userId
+    : null;
+  const displayName = isPrivate ? (otherUser?.name || 'Người dùng') : conversationInfo?.name;
+
+  useEffect(() => {
+    if (tab === 'media') loadMedia();
+    else if (tab === 'file') loadFiles();
+    else if (tab === 'link') loadLinks();
+    else if (tab === 'pins') loadPins();
+  }, [tab, conversationId]);
+
+  const loadMedia = async () => {
+    setIsLoading(true);
+    try {
+      const data = await conversationService.getInfoMedia(conversationId);
+      setMedia(flattenHashTable(data));
+    } catch { toast.error('Không thể tải media'); }
+    finally { setIsLoading(false); }
+  };
+
+  const loadFiles = async () => {
+    setIsLoading(true);
+    try {
+      const data = await conversationService.getInfoFile(conversationId);
+      setFiles(flattenHashTable(data));
+    } catch { toast.error('Không thể tải file'); }
+    finally { setIsLoading(false); }
+  };
+
+  const loadLinks = async () => {
+    setIsLoading(true);
+    try {
+      const data = await conversationService.getInfoLinkPreview(conversationId);
+      setLinks(flattenHashTable(data));
+    } catch { toast.error('Không thể tải liên kết'); }
+    finally { setIsLoading(false); }
+  };
+
+  const loadPins = async () => {
+    setIsLoading(true);
+    try {
+      const data = await conversationService.getPins(conversationId);
+      setPins(data || []);
+    } catch { toast.error('Không thể tải tin nhắn ghim'); }
+    finally { setIsLoading(false); }
+  };
+
+  const handleArchive = async () => {
+    try {
+      await conversationService.archiveConversation(conversationId);
+      toast.success('Đã lưu trữ cuộc trò chuyện');
+      onConversationAction?.();
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const handleMute = async () => {
+    try {
+      await conversationService.muteConversation(conversationId, 60);
+      toast.success('Đã tắt thông báo 1 giờ');
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const handleLeave = async () => {
+    if (!confirm('Bạn có chắc muốn rời nhóm?')) return;
+    try {
+      await conversationService.leaveGroup(conversationId, '', '');
+      toast.success('Đã rời nhóm');
+      onConversationAction?.();
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const handleDisband = async () => {
+    if (!confirm('Bạn có chắc muốn giải tán nhóm? Hành động này không thể hoàn tác.')) return;
+    try {
+      await conversationService.disbandGroup(conversationId, '');
+      toast.success('Đã giải tán nhóm');
+      onConversationAction?.();
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    try {
+      await conversationService.removeMembers(conversationId, [userId]);
+      toast.success('Đã xóa thành viên');
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const handleChangeRole = async (userId: string, role: 'admin' | 'member') => {
+    try {
+      await conversationService.changeRole(conversationId, userId, role);
+      toast.success('Đã thay đổi vai trò');
+    } catch { toast.error('Thao tác thất bại'); }
+  };
+
+  const TABS: { key: Tab; icon: React.ReactNode; label: string }[] = [
+    { key: 'info', icon: <User size={14} />, label: 'Thông tin' },
+    { key: 'media', icon: <ImageIcon size={14} />, label: 'Ảnh/Video' },
+    { key: 'file', icon: <File size={14} />, label: 'File' },
+    { key: 'link', icon: <Link size={14} />, label: 'Liên kết' },
+    ...(isGroup ? [{ key: 'members' as Tab, icon: <Users size={14} />, label: 'Thành viên' }] : []),
+    { key: 'pins', icon: <Pin size={14} />, label: 'Ghim' },
+  ];
+
+  return (
+    <div className="w-80 h-full bg-white border-l border-gray-100 flex flex-col shadow-lg flex-shrink-0 animate-in slide-in-from-right duration-300">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <span className="font-bold text-sm text-gray-800">Thông tin hội thoại</span>
+        <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-500 transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Profile section */}
+      <div className="flex flex-col items-center py-6 px-4 border-b border-gray-100 bg-gradient-to-b from-blue-50/50 to-white">
+        <Avatar name={displayName || '?'} size="xl" />
+        <div className="mt-3 font-bold text-gray-900 text-base text-center">{displayName}</div>
+        {isPrivate && otherUser?.status && (
+          <div className="mt-1 text-xs text-gray-400">{otherUser.status}</div>
+        )}
+        {isGroup && (
+          <div className="mt-1 text-xs text-gray-400">{conversationInfo?.participants?.length} thành viên</div>
+        )}
+
+        {/* Quick actions */}
+        <div className="flex gap-3 mt-4">
+          <button onClick={handleMute} className="flex flex-col items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+            <BellOff size={16} className="text-gray-600" />
+            <span className="text-[10px] text-gray-600 font-medium">Tắt thông báo</span>
+          </button>
+          <button onClick={handleArchive} className="flex flex-col items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+            <File size={16} className="text-gray-600" />
+            <span className="text-[10px] text-gray-600 font-medium">Lưu trữ</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-0.5 p-2 bg-gray-50 border-b border-gray-100 overflow-x-auto flex-shrink-0">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${tab === t.key ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-500" size={22} /></div>
+        ) : (
+          <>
+            {/* INFO TAB */}
+            {tab === 'info' && (
+              <div className="p-4 space-y-2">
+                {isPrivate && otherUser && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-xl">
+                      <span className="text-xs text-gray-500">Tên</span>
+                      <span className="text-xs font-semibold text-gray-800">{otherUser.name}</span>
+                    </div>
+                    {otherUser.phone && (
+                      <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 rounded-xl">
+                        <span className="text-xs text-gray-500">Điện thoại</span>
+                        <span className="text-xs font-semibold text-gray-800">{otherUser.phone}</span>
+                      </div>
+                    )}
+                    {otherUser.customStatusMessage && (
+                      <div className="px-3 py-2.5 bg-gray-50 rounded-xl">
+                        <div className="text-xs text-gray-500 mb-1">Trạng thái</div>
+                        <div className="text-xs font-medium text-gray-800">{otherUser.customStatusMessage}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isGroup && conversationInfo?.description && (
+                  <div className="px-3 py-2.5 bg-gray-50 rounded-xl">
+                    <div className="text-xs text-gray-500 mb-1">Mô tả nhóm</div>
+                    <div className="text-xs text-gray-700">{conversationInfo.description}</div>
+                  </div>
+                )}
+                {/* Danger zone */}
+                <div className="mt-4 pt-4 border-t border-gray-100 space-y-1">
+                  {isGroup && (
+                    <button onClick={handleLeave} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                      <LogOut size={14} /> Rời nhóm
+                    </button>
+                  )}
+                  {isGroup && isOwner && (
+                    <button onClick={handleDisband} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-600 hover:bg-red-50 rounded-xl transition-colors font-bold">
+                      <Trash2 size={14} /> Giải tán nhóm
+                    </button>
+                  )}
+                  {isPrivate && (
+                    <button onClick={async () => { await conversationService.removeConversation(conversationId); onConversationAction?.(); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                      <Trash2 size={14} /> Xóa trò chuyện
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* MEDIA TAB */}
+            {tab === 'media' && (
+              <div className="p-3">
+                {media.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có ảnh hay video nào</div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1">
+                    {media.map((item: any, i: number) => (
+                      <div key={i} className="aspect-square rounded-lg overflow-hidden bg-gray-100 group relative">
+                        <img src={item.url || item.fileUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <a href={item.url || item.fileUrl} download target="_blank" rel="noopener noreferrer"
+                          className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                          <Download size={16} />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* FILE TAB */}
+            {tab === 'file' && (
+              <div className="p-3 space-y-1">
+                {files.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có file nào</div>
+                ) : files.map((item: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                      <File size={15} />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <div className="text-xs font-semibold text-gray-800 truncate">{item.fileName || item.name || 'File'}</div>
+                      <div className="text-[10px] text-gray-400">{item.fileSize ? `${(item.fileSize / 1024).toFixed(1)} KB` : ''}</div>
+                    </div>
+                    <a href={item.url || item.fileUrl} download target="_blank" rel="noopener noreferrer"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-blue-100 rounded-lg text-blue-500 transition-all">
+                      <Download size={13} />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* LINK TAB */}
+            {tab === 'link' && (
+              <div className="p-3 space-y-2">
+                {links.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có liên kết nào</div>
+                ) : links.map((item: any, i: number) => (
+                  <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+                    className="block p-3 bg-gray-50 hover:bg-blue-50 rounded-xl border border-gray-100 hover:border-blue-200 transition-all group">
+                    {item.image && <img src={item.image} alt="" className="w-full h-24 object-cover rounded-lg mb-2" />}
+                    <div className="text-xs font-bold text-gray-800 line-clamp-2 group-hover:text-blue-700">{item.title || item.url}</div>
+                    {item.description && <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{item.description}</div>}
+                    <div className="flex items-center gap-1 mt-1.5 text-[10px] text-blue-400">
+                      <ExternalLink size={10} /> <span className="truncate">{item.url}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* MEMBERS TAB */}
+            {tab === 'members' && isGroup && (
+              <div className="p-3 space-y-1">
+                {(conversationInfo?.participants || []).map((p: any) => {
+                  const member = p.userId;
+                  const memberId = member?._id || member;
+                  const isSelf = memberId === currentUserId;
+                  return (
+                    <div key={memberId} className="flex items-center gap-2.5 p-2.5 hover:bg-gray-50 rounded-xl group">
+                      <Avatar name={member?.name || 'U'} size="sm" />
+                      <div className="flex-1 overflow-hidden">
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-semibold text-gray-800 truncate">{member?.name}{isSelf && ' (Bạn)'}</span>
+                          {p.role === 'owner' && <span className="text-[9px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold">Trưởng nhóm</span>}
+                          {p.role === 'admin' && <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">Phó nhóm</span>}
+                        </div>
+                      </div>
+                      {isAdmin && !isSelf && p.role !== 'owner' && (
+                        <div className="hidden group-hover:flex gap-1">
+                          {isOwner && (
+                            <button onClick={() => handleChangeRole(memberId, p.role === 'admin' ? 'member' : 'admin')}
+                              className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg" title={p.role === 'admin' ? 'Hạ xuống thành viên' : 'Phong làm phó nhóm'}>
+                              <Shield size={13} />
+                            </button>
+                          )}
+                          <button onClick={() => handleRemoveMember(memberId)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Xóa khỏi nhóm">
+                            <UserMinus size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* PINS TAB */}
+            {tab === 'pins' && (
+              <div className="p-3 space-y-2">
+                {pins.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có tin nhắn ghim</div>
+                ) : pins.map((pin: any, i: number) => (
+                  <div key={i} className="p-3 bg-yellow-50 border border-yellow-100 rounded-xl">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Pin size={11} className="text-yellow-500" />
+                      <span className="text-[10px] text-yellow-600 font-bold">Tin nhắn ghim</span>
+                    </div>
+                    <div className="text-xs text-gray-700">{pin.content}</div>
+                    <div className="text-[10px] text-gray-400 mt-1">{pin.senderId?.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ConversationPanel;
