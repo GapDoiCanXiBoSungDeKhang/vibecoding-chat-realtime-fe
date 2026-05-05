@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Phone, Video, MoreVertical, Loader2, Image, File, Mic, Smile, Reply, Edit2, Trash2, Forward, Pin, X, Check, Info } from 'lucide-react';
+import { Send, Phone, Video, MoreVertical, Loader2, Image, File as FileIcon, Mic, MicOff, Smile, Reply, Edit2, Trash2, Forward, Pin, PinOff, X, Check, Info, ExternalLink } from 'lucide-react';
 import { messageService } from '../../services/messageService';
 import { conversationService } from '../../services/conversationService';
 import { useAuth } from '../../context/AuthContext';
@@ -29,12 +29,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<any>(null);
+  const [forwardTargets, setForwardTargets] = useState<string[]>([]);
+  const [allConversations, setAllConversations] = useState<any[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
 
   const handleNewMessage = useCallback((payload: any) => {
-    const msg = payload.message || payload;
+    let msg = payload.message || payload;
+    if (payload.attachments && !msg.attachments) {
+      msg = { ...msg, attachments: payload.attachments };
+    }
     setMessages(prev => [...prev, msg]);
   }, []);
 
@@ -43,6 +51,44 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     currentUserId: user?.sub,
     onNewMessage: handleNewMessage,
     onConversationUpdate: () => fetchChatData(),
+    onMessageEdited: (payload: any) => {
+      const edited = payload.message || payload;
+      setMessages(prev => prev.map(m => (m._id === (edited._id || edited.id)) ? { ...m, ...edited, isEdited: true } : m));
+    },
+    onMessageDeleted: (payload: any) => {
+      if (payload.scope === 'everyone') {
+        setMessages(prev => prev.map(m => m._id === payload.messageId ? { ...m, isDeleted: true, content: 'Tin nhắn đã bị thu hồi' } : m));
+      } else if (payload.deletedBy === user?.sub) {
+        setMessages(prev => prev.filter(m => m._id !== payload.messageId));
+      }
+    },
+    onMessageReacted: (payload: any) => {
+      setMessages(prev => prev.map(m => {
+        if (m._id !== payload.messageId) return m;
+        let reactions = [...(m.reactions || [])];
+        if (payload.action === 'remove') {
+          reactions = reactions.filter((r: any) => (r.userId?._id || r.userId) !== payload.userId);
+        } else {
+          reactions = reactions.filter((r: any) => (r.userId?._id || r.userId) !== payload.userId);
+          reactions.push({ userId: payload.userId, emoji: payload.emoji });
+        }
+        return { ...m, reactions };
+      }));
+    },
+    onMessageSeen: (payload: any) => {
+      setMessages(prev => prev.map(m => {
+        if (!m.seenBy) return m;
+        const already = m.seenBy.some((s: any) => (s._id || s) === (payload.seenBy?._id || payload.userId));
+        if (already) return m;
+        return { ...m, seenBy: [...m.seenBy, payload.seenBy || { _id: payload.userId }] };
+      }));
+    },
+    onMessagePinned: (payload: any) => {
+      setMessages(prev => prev.map(m => m._id === payload.messageId ? { ...m, isPinned: true } : m));
+    },
+    onMessageUnpinned: (payload: any) => {
+      setMessages(prev => prev.map(m => m._id === payload.messageId ? { ...m, isPinned: false } : m));
+    },
   });
 
   useEffect(() => {
@@ -139,13 +185,78 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setContextMenu(null);
   };
 
+  const handleUnpin = async (msg: any) => {
+    try {
+      await messageService.unpinMessage(activeChat!, msg._id);
+      setMessages(prev => prev.map(m => m._id === msg._id ? { ...m, isPinned: false } : m));
+      toast.success('Đã bỏ ghim');
+    } catch { toast.error('Không thể bỏ ghim'); }
+    setContextMenu(null);
+  };
+
+  const handleUnreact = async (msgId: string) => {
+    try {
+      await messageService.unreactMessage(activeChat!, msgId);
+      setMessages(prev => prev.map(m => {
+        if (m._id !== msgId) return m;
+        return { ...m, reactions: (m.reactions || []).filter((r: any) => (r.userId?._id || r.userId) !== user?.sub) };
+      }));
+    } catch { toast.error('Không thể bỏ cảm xúc'); }
+  };
+
+  const handleForward = async () => {
+    if (!forwardMsg || !forwardTargets.length || !activeChat) return;
+    try {
+      await messageService.forwardMessage(activeChat, forwardMsg._id, forwardTargets);
+      toast.success(`Đã chuyển tiếp đến ${forwardTargets.length} cuộc trò chuyện`);
+    } catch { toast.error('Không thể chuyển tiếp'); }
+    setForwardMsg(null); setForwardTargets([]);
+  };
+
+  const openForwardModal = async (msg: any) => {
+    setForwardMsg(msg);
+    setContextMenu(null);
+    try {
+      const { conversationService } = await import('../../services/conversationService');
+      const convs = await conversationService.getConversations();
+      setAllConversations(convs.filter((c: any) => c._id !== activeChat));
+    } catch {}
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        try {
+          await messageService.uploadVoice(activeChat!, file, replyTo?._id);
+          setReplyTo(null);
+        } catch { toast.error('Gửi voice thất bại'); }
+        setIsRecording(false);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch { toast.error('Không thể truy cập micro'); }
+  };
+
+  const stopVoiceRecording = () => {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'file' | 'media') => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !activeChat) return;
     try {
-      if (type === 'file') await messageService.uploadFiles(activeChat, files);
-      else await messageService.uploadMedia(activeChat, files);
-      toast.success('Đã gửi');
+      if (type === 'file') await messageService.uploadFiles(activeChat, files, replyTo?._id);
+      else await messageService.uploadMedia(activeChat, files, replyTo?._id);
+      setReplyTo(null); toast.success('Đã gửi');
     } catch { toast.error('Không thể tải lên'); }
     e.target.value = '';
   };
@@ -253,21 +364,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                     onContextMenu={e => { e.preventDefault(); if (!msg.isDeleted) setContextMenu({ x: e.clientX, y: e.clientY, msg }); }}
                   >
                     {msg.type === 'file' && !msg.isDeleted ? (
-                      <div className="flex items-center gap-2">
-                        <File size={14} className={isMine ? 'text-white/80' : 'text-gray-400'} />
-                        <span className="truncate max-w-[200px]">{msg.attachments?.[0]?.fileName || 'File'}</span>
-                      </div>
+                      <a href={msg.attachments?.[0]?.fileUrl || msg.attachments?.[0]?.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline cursor-pointer">
+                        <FileIcon size={14} className={isMine ? 'text-white/80' : 'text-gray-400'} />
+                        <span className="truncate max-w-[200px]">{msg.attachments?.[0]?.fileName || 'File đính kèm'}</span>
+                      </a>
                     ) : msg.type === 'media' && !msg.isDeleted ? (
                       <div className="space-y-1">
                         {msg.attachments?.map((a: any, ai: number) => (
-                          <img key={ai} src={a.url || a.fileUrl} alt="" className="rounded-xl max-w-xs max-h-48 object-cover" />
+                          <img key={ai} src={a.url || a.fileUrl} alt="media" 
+                            className="rounded-xl max-w-xs max-h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                            onClick={() => window.open(a.url || a.fileUrl, '_blank')}
+                          />
                         ))}
                         {msg.content && <p className="text-xs mt-1 opacity-80">{msg.content}</p>}
                       </div>
                     ) : msg.type === 'voice' && !msg.isDeleted ? (
-                      <div className="flex items-center gap-2">
-                        <Mic size={14} className={isMine ? 'text-white/80' : 'text-gray-400'} />
-                        <span className="text-xs">{msg.attachments?.[0]?.duration ? `${Math.round(msg.attachments[0].duration)}s` : 'Tin nhắn thoại'}</span>
+                      <div className="flex flex-col gap-1">
+                        <audio src={msg.attachments?.[0]?.fileUrl || msg.attachments?.[0]?.url} controls className="h-10 max-w-[240px]" />
                       </div>
                     ) : msg.type === 'call' && !msg.isDeleted ? (
                       <div className="flex items-center gap-2">
@@ -283,11 +396,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
 
                     {/* Hover action bar */}
                     {!msg.isDeleted && (
-                      <div className={`absolute -top-7 ${isMine ? 'right-0' : 'left-0'} hidden group-hover:flex bg-white rounded-full shadow-md border border-gray-100 px-1 py-0.5 gap-0.5`}>
-                        <button onClick={() => setEmojiPickerMsg(msg._id)} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Cảm xúc"><Smile size={13} /></button>
-                        <button onClick={() => setReplyTo(msg)} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Trả lời"><Reply size={13} /></button>
-                        {isMine && <button onClick={() => { setEditingMsg(msg); setEditContent(msg.content); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Sửa"><Edit2 size={13} /></button>}
-                        <button onClick={() => setContextMenu({ x: 0, y: 0, msg })} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Thêm"><MoreVertical size={13} /></button>
+                      <div className={`absolute -top-7 ${isMine ? 'right-0' : 'left-0'} hidden group-hover:flex bg-white rounded-full shadow-md border border-gray-100 px-1 py-0.5 gap-0.5 z-20`}>
+                        <button onClick={(e) => { e.stopPropagation(); setEmojiPickerMsg(msg._id); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Cảm xúc"><Smile size={13} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setReplyTo(msg); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Trả lời"><Reply size={13} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); openForwardModal(msg); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Chuyển tiếp"><Forward size={13} /></button>
+                        {isMine && <button onClick={(e) => { e.stopPropagation(); setEditingMsg(msg); setEditContent(msg.content); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Sửa"><Edit2 size={13} /></button>}
+                        <button onClick={(e) => { e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, msg }); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500" title="Thêm"><MoreVertical size={13} /></button>
                       </div>
                     )}
 
@@ -302,11 +416,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                   {/* Reactions */}
                   {Object.keys(grouped).length > 0 && (
                     <div className={`flex flex-wrap gap-0.5 mt-0.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
-                      {Object.entries(grouped).map(([em, cnt]) => (
-                        <button key={em} onClick={() => handleReact(msg._id, em)} className="text-xs bg-white border border-gray-200 rounded-full px-1.5 py-0.5 hover:bg-gray-50 shadow-sm">
-                          {em} {String(cnt)}
-                        </button>
-                      ))}
+                      {Object.entries(grouped).map(([em, cnt]) => {
+                        const myReaction = (msg.reactions || []).find((r: any) => (r.userId?._id || r.userId) === user?.sub && r.emoji === em);
+                        return (
+                          <button key={em} onClick={() => myReaction ? handleUnreact(msg._id) : handleReact(msg._id, em)}
+                            className={`text-xs border rounded-full px-1.5 py-0.5 shadow-sm transition-colors ${myReaction ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                            {em} {String(cnt)}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -334,13 +452,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
 
       {/* Context menu */}
       {contextMenu && contextMenu.x > 0 && (
-        <div className="fixed bg-white border border-gray-100 shadow-xl rounded-xl py-1.5 w-44 z-50 animate-in fade-in zoom-in-95"
+        <div className="fixed bg-white border border-gray-100 shadow-xl rounded-xl py-1.5 w-48 z-50 animate-in fade-in zoom-in-95"
           style={{ top: contextMenu.y, left: contextMenu.x }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => setReplyTo(contextMenu.msg)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Reply size={14} /> Trả lời</button>
+          <button onClick={() => { setReplyTo(contextMenu.msg); setContextMenu(null); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Reply size={14} /> Trả lời</button>
+          <button onClick={() => { openForwardModal(contextMenu.msg); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Forward size={14} /> Chuyển tiếp</button>
           {(contextMenu.msg.senderId?._id || contextMenu.msg.senderId) === user?.sub && (
             <button onClick={() => { setEditingMsg(contextMenu.msg); setEditContent(contextMenu.msg.content); setContextMenu(null); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Edit2 size={14} /> Chỉnh sửa</button>
           )}
-          <button onClick={() => handlePin(contextMenu.msg)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Pin size={14} /> Ghim</button>
+          {contextMenu.msg.isPinned ? (
+            <button onClick={() => handleUnpin(contextMenu.msg)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><PinOff size={14} /> Bỏ ghim</button>
+          ) : (
+            <button onClick={() => handlePin(contextMenu.msg)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"><Pin size={14} /> Ghim</button>
+          )}
           <div className="h-px bg-gray-100 my-1" />
           {(contextMenu.msg.senderId?._id || contextMenu.msg.senderId) === user?.sub && (
             <button onClick={() => handleDelete(contextMenu.msg, 'everyone')} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14} /> Thu hồi</button>
@@ -365,7 +488,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => handleFileUpload(e, 'file')} />
         <input ref={mediaInputRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={e => handleFileUpload(e, 'media')} />
         <form onSubmit={handleSend} className="flex items-center gap-2">
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors"><File size={18} /></button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors"><FileIcon size={18} /></button>
           <button type="button" onClick={() => mediaInputRef.current?.click()} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors"><Image size={18} /></button>
           <input
             type="text"
@@ -373,14 +496,58 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
             onChange={e => { editingMsg ? setEditContent(e.target.value) : setNewMessage(e.target.value); notifyTyping(); }}
             placeholder={editingMsg ? 'Chỉnh sửa tin nhắn...' : 'Nhập tin nhắn...'}
             className="flex-1 px-4 py-2.5 bg-gray-100 focus:bg-white rounded-xl border border-transparent focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none text-sm transition-all"
-            disabled={isSending}
+            disabled={isSending || isRecording}
           />
+          {/* Voice recording button */}
+          <button type="button" onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+            className={`p-2 rounded-full transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
+            title={isRecording ? 'Dừng ghi âm' : 'Ghi âm giọng nói'}>
+            {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
           <button type="submit" disabled={!(editingMsg ? editContent : newMessage).trim() || isSending}
             className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl transition-all shadow-md active:scale-95">
             {isSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
           </button>
         </form>
       </div>
+
+      {/* Forward Modal */}
+      {forwardMsg && (
+        <div className="absolute inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => { setForwardMsg(null); setForwardTargets([]); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-96 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <span className="font-bold text-gray-800">Chuyển tiếp tin nhắn</span>
+              <button onClick={() => { setForwardMsg(null); setForwardTargets([]); }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="px-4 py-2 text-xs bg-gray-50 border-b border-gray-100 truncate text-gray-500">
+              "{forwardMsg.content || 'File/Media'}"
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {allConversations.map((c: any) => {
+                const isPriv = c.type === 'private';
+                const name = isPriv ? c.participants?.find((p: any) => (p.userId?._id || p.userId) !== user?.sub)?.userId?.name || 'Người dùng' : c.name;
+                const selected = forwardTargets.includes(c._id);
+                return (
+                  <button key={c._id} onClick={() => setForwardTargets(prev => selected ? prev.filter(id => id !== c._id) : [...prev, c._id])}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors ${selected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs ${selected ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300'}`}>
+                      {selected && <Check size={12} />}
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 truncate">{name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => { setForwardMsg(null); setForwardTargets([]); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Hủy</button>
+              <button onClick={handleForward} disabled={!forwardTargets.length}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 transition-colors">
+                Gửi ({forwardTargets.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

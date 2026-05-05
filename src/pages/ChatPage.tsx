@@ -134,18 +134,20 @@ const ChatPage: React.FC = () => {
 
       {/* Dynamic Views */}
       {currentView === 'contacts' ? (
-        <div className="flex-1 overflow-y-auto animate-in fade-in slide-in-from-right-2 duration-300">
+        <div className="flex-1 flex flex-col overflow-y-auto animate-in fade-in slide-in-from-right-2 duration-300">
           <ContactsView onStartChat={handleStartChat} />
         </div>
       ) : (
-        <div className="flex flex-1 overflow-hidden">
-          <ChatArea
-            activeChat={activeChat}
-            onClose={() => { setActiveChat(null); setIsPanelOpen(false); }}
-            onOpenInfo={() => {
-              if (activeChatInfo) setIsPanelOpen(p => !p);
-            }}
-          />
+        <div className="flex-1 flex h-full overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0">
+            <ChatArea
+              activeChat={activeChat}
+              onClose={() => { setActiveChat(null); setIsPanelOpen(false); }}
+              onOpenInfo={() => {
+                if (activeChatInfo) setIsPanelOpen(p => !p);
+              }}
+            />
+          </div>
           {isPanelOpen && activeChatInfo && activeChat && (
             <ConversationPanel
               conversationId={activeChat}

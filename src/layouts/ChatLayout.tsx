@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 
 interface ChatLayoutProps {
   primarySidebar: ReactNode;
@@ -11,7 +11,7 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({ primarySidebar, secondar
     <div className="flex h-screen w-full bg-white overflow-hidden font-sans text-[14px]">
       {primarySidebar}
       {secondarySidebar}
-      <main className="flex-1 h-full relative bg-white flex flex-col overflow-hidden">
+      <main className="flex-1 h-full relative bg-white flex overflow-hidden min-w-0">
         {children}
       </main>
     </div>

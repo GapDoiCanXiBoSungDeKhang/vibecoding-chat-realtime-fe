@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, MessageCircle, Users as UsersIcon,
-  LogOut, Trash2, Archive, BellOff, Bell,
-  Info, ChevronRight, MoreHorizontal
+  LogOut, Trash2, Archive, ArchiveRestore, BellOff, Bell,
+  Info, ChevronDown, ChevronRight, MoreHorizontal
 } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import { conversationService } from '../../services/conversationService';
@@ -33,8 +33,24 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
   onOpenInfo,
   onRefresh,
 }) => {
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conv: any } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conv: any; isArchived?: boolean } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [archivedConvs, setArchivedConvs] = useState<any[]>([]);
+  const [isArchivedOpen, setIsArchivedOpen] = useState(false);
+  const [isArchivedLoading, setIsArchivedLoading] = useState(false);
+
+  const fetchArchived = async () => {
+    setIsArchivedLoading(true);
+    try {
+      const data = await conversationService.getConversations(true);
+      setArchivedConvs(data || []);
+    } catch { /* silent */ }
+    finally { setIsArchivedLoading(false); }
+  };
+
+  useEffect(() => {
+    if (isArchivedOpen && archivedConvs.length === 0) fetchArchived();
+  }, [isArchivedOpen]);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -42,13 +58,12 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const handleContextMenu = (e: React.MouseEvent, conv: any) => {
+  const handleContextMenu = (e: React.MouseEvent, conv: any, isArchived = false) => {
     e.preventDefault();
     e.stopPropagation();
-    // Adjust position to stay in viewport
     const x = Math.min(e.clientX, window.innerWidth - 200);
     const y = Math.min(e.clientY, window.innerHeight - 280);
-    setContextMenu({ x, y, conv });
+    setContextMenu({ x, y, conv, isArchived });
   };
 
   const exec = async (fn: () => Promise<void>, successMsg: string) => {
@@ -187,6 +202,75 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                 {searchTerm ? 'Không tìm thấy kết quả' : 'Không có cuộc trò chuyện nào'}
               </div>
             )}
+
+            {/* ── Archived Section ── */}
+            {!searchTerm && (
+              <div className="border-t border-gray-200 mt-1">
+                <button
+                  onClick={() => setIsArchivedOpen(o => !o)}
+                  className="w-full flex items-center gap-2 px-5 py-2.5 text-[11px] font-bold text-gray-500 hover:bg-gray-200/60 transition-colors"
+                >
+                  <Archive size={13} className="text-gray-400" />
+                  <span className="flex-1 text-left">Tin nhắn đã lưu trữ</span>
+                  {archivedConvs.length > 0 && (
+                    <span className="min-w-[18px] h-[18px] bg-gray-300 text-gray-600 text-[9px] rounded-full flex items-center justify-center px-1 font-bold">
+                      {archivedConvs.length}
+                    </span>
+                  )}
+                  {isArchivedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                </button>
+
+                {isArchivedOpen && (
+                  <div className="bg-gray-100/50">
+                    {isArchivedLoading ? (
+                      <div className="py-4 flex justify-center">
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
+                      </div>
+                    ) : archivedConvs.length === 0 ? (
+                      <div className="py-4 text-center text-[11px] text-gray-400 italic">Không có tin nhắn lưu trữ</div>
+                    ) : (
+                      archivedConvs.map(conv => {
+                        const isPrivate = conv.type === 'private';
+                        let convName = conv.name;
+                        if (isPrivate && conv.participants) {
+                          const other = conv.participants.find((p: any) => (p.userId?._id || p.userId) !== currentUserId)?.userId;
+                          convName = other?.name || 'Người dùng';
+                        }
+                        return (
+                          <div
+                            key={conv._id}
+                            onClick={() => onSelectChat(conv._id)}
+                            onContextMenu={(e) => handleContextMenu(e, conv, true)}
+                            className={`px-4 py-2 cursor-pointer flex gap-3 items-center transition-all hover:bg-gray-200/80 opacity-75 hover:opacity-100 group relative ${
+                              activeChatId === conv._id ? 'bg-[#e5efff] opacity-100' : ''
+                            }`}
+                          >
+                            <div className="relative flex-shrink-0">
+                              <Avatar name={convName} size="md" />
+                              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-gray-500 rounded-full flex items-center justify-center">
+                                <Archive size={7} className="text-white" />
+                              </div>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <div className="text-sm truncate font-medium text-gray-600">{convName}</div>
+                              <div className="text-[11px] truncate text-gray-400">
+                                {conv.lastMessage?.content || 'Chưa có tin nhắn'}
+                              </div>
+                            </div>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleContextMenu(e, conv, true); }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-gray-200 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-300"
+                            >
+                              <MoreHorizontal size={13} />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="py-2 space-y-0.5 px-2">
@@ -223,13 +307,22 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
 
           <div className="h-px bg-gray-100 my-1" />
 
-          {/* Archive */}
-          <button
-            onClick={() => exec(() => conversationService.archiveConversation(contextMenu.conv._id), 'Đã lưu trữ')}
-            className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
-          >
-            <Archive size={14} className="text-gray-400" /> Lưu trữ trò chuyện
-          </button>
+          {/* Archive / Unarchive */}
+          {contextMenu.isArchived ? (
+            <button
+              onClick={() => exec(async () => { await conversationService.unarchiveConversation(contextMenu.conv._id); await fetchArchived(); }, 'Đã bỏ lưu trữ')}
+              className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+            >
+              <ArchiveRestore size={14} className="text-gray-400" /> Bỏ lưu trữ
+            </button>
+          ) : (
+            <button
+              onClick={() => exec(async () => { await conversationService.archiveConversation(contextMenu.conv._id); await fetchArchived(); }, 'Đã lưu trữ')}
+              className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+            >
+              <Archive size={14} className="text-gray-400" /> Lưu trữ trò chuyện
+            </button>
+          )}
 
           {/* Mute / Unmute */}
           {isMuted(contextMenu.conv) ? (
