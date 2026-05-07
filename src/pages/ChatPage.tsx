@@ -13,11 +13,18 @@ import CreatePrivateChatModal from '../components/chat/CreatePrivateChatModal';
 import { ChatLayout } from '../layouts/ChatLayout';
 import { useConversationSocket } from '../hooks/useConversationSocket';
 import { useFriendSocket } from '../hooks/useFriendSocket';
+import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 
 const ChatPage: React.FC = () => {
   const { logout, user } = useAuth();
   const [conversations, setConversations] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
+  
+  useGlobalNotifications(activeChat, (id) => {
+    setActiveChat(id);
+    setCurrentView('chats');
+  });
+
   const [activeChatInfo, setActiveChatInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<'chats' | 'contacts'>('chats');
