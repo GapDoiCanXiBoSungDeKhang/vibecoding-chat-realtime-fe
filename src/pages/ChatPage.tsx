@@ -21,10 +21,14 @@ const ChatPage: React.FC = () => {
   const { joinConversation } = useSocket();
   const [conversations, setConversations] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
+  const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
   
   useGlobalNotifications(activeChat, (id) => {
     setActiveChat(id);
     setCurrentView('chats');
+  }, (id) => {
+    // onMention callback
+    setUnreadMentions(prev => new Set(prev).add(id));
   });
 
   const [activeChatInfo, setActiveChatInfo] = useState<any>(null);
@@ -126,8 +130,14 @@ const ChatPage: React.FC = () => {
           onSelectChat={(id) => {
             setActiveChat(id);
             setCurrentView('chats');
+            setUnreadMentions(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
           }}
           activeChatId={activeChat}
+          unreadMentions={unreadMentions}
           onCreateGroup={() => setIsCreateGroupOpen(true)}
           onCreatePrivate={() => setIsCreatePrivateOpen(true)}
           currentUserId={user?.sub || ''}

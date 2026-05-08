@@ -19,6 +19,7 @@ interface SidebarSecondaryProps {
   currentUserId: string;
   onOpenInfo?: (conv: any) => void;
   onRefresh?: () => void;
+  unreadMentions?: Set<string>;
 }
 
 const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
@@ -32,6 +33,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
   currentUserId,
   onOpenInfo,
   onRefresh,
+  unreadMentions = new Set(),
 }) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; conv: any; isArchived?: boolean } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -178,6 +180,11 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                           {conv.unreadCount > 0 && (
                             <div className="min-w-[16px] h-4 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1">
                               {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                            </div>
+                          )}
+                          {unreadMentions.has(conv._id) && (
+                            <div className="w-4 h-4 bg-yellow-500 rounded-full text-white text-[10px] font-black flex items-center justify-center shadow-sm" title="Bạn được nhắc tên">
+                              @
                             </div>
                           )}
                         </div>

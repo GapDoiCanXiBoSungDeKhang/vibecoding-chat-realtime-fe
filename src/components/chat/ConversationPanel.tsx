@@ -8,7 +8,7 @@ import { conversationService } from '../../services/conversationService';
 import Avatar from '../ui/Avatar';
 import toast from 'react-hot-toast';
 
-type Tab = 'info' | 'media' | 'file' | 'link' | 'members' | 'pins';
+type Tab = 'info' | 'media' | 'file' | 'link' | 'members' | 'pins' | 'announcements';
 
 interface ConversationPanelProps {
   conversationId: string;
@@ -30,6 +30,9 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
   const [files, setFiles] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [pins, setPins] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Backend returns { year: { month: [items] } } — flatten it to a plain array
@@ -65,6 +68,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     else if (tab === 'file') loadFiles();
     else if (tab === 'link') loadLinks();
     else if (tab === 'pins') loadPins();
+    else if (tab === 'announcements') loadAnnouncements();
   }, [tab, conversationId]);
 
   const loadMedia = async () => {
@@ -101,6 +105,28 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
       setPins(data || []);
     } catch { toast.error('Không thể tải tin nhắn ghim'); }
     finally { setIsLoading(false); }
+  };
+
+  const loadAnnouncements = async () => {
+    setIsLoading(true);
+    try {
+      const data = await conversationService.getAnnouncements(conversationId);
+      setAnnouncements(data || []);
+    } catch { toast.error('Không thể tải bản tin'); }
+    finally { setIsLoading(false); }
+  };
+
+  const handlePostAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnnouncement.trim()) return;
+    setIsPostingAnnouncement(true);
+    try {
+      await conversationService.createAnnouncement(conversationId, newAnnouncement);
+      toast.success('Đã đăng bản tin');
+      setNewAnnouncement('');
+      loadAnnouncements();
+    } catch { toast.error('Không thể đăng bản tin'); }
+    finally { setIsPostingAnnouncement(false); }
   };
 
   const handleArchive = async () => {
@@ -157,6 +183,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     { key: 'link', icon: <Link size={14} />, label: 'Liên kết' },
     ...(isGroup ? [{ key: 'members' as Tab, icon: <Users size={14} />, label: 'Thành viên' }] : []),
     { key: 'pins', icon: <Pin size={14} />, label: 'Ghim' },
+    { key: 'announcements', icon: <Bell size={14} />, label: 'Bản tin' },
   ];
 
   return (
@@ -368,15 +395,60 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                 {pins.length === 0 ? (
                   <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có tin nhắn ghim</div>
                 ) : pins.map((pin: any, i: number) => (
-                  <div key={i} className="p-3 bg-yellow-50 border border-yellow-100 rounded-xl">
+                  <div key={i} className="p-3 bg-yellow-50 border border-yellow-100 rounded-xl hover:bg-yellow-100 transition-colors cursor-pointer shadow-sm">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Pin size={11} className="text-yellow-500" />
                       <span className="text-[10px] text-yellow-600 font-bold">Tin nhắn ghim</span>
                     </div>
-                    <div className="text-xs text-gray-700">{pin.content}</div>
-                    <div className="text-[10px] text-gray-400 mt-1">{pin.senderId?.name}</div>
+                    <div className="text-xs text-gray-700 leading-relaxed break-words">{pin.content || 'File/Media'}</div>
+                    <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-yellow-200/50">
+                      <Avatar name={pin.senderId?.name} size="xs" />
+                      <span className="text-[10px] text-gray-500">{pin.senderId?.name} • {new Date(pin.createdAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ANNOUNCEMENTS TAB */}
+            {tab === 'announcements' && (
+              <div className="p-3 flex flex-col h-full space-y-4">
+                {isAdmin && (
+                  <form onSubmit={handlePostAnnouncement} className="space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-100 shadow-sm">
+                    <textarea
+                      value={newAnnouncement}
+                      onChange={e => setNewAnnouncement(e.target.value)}
+                      placeholder="Nhập nội dung bản tin nhóm..."
+                      className="w-full text-xs p-2.5 rounded-lg border border-blue-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none min-h-[80px] bg-white transition-all"
+                    />
+                    <div className="flex justify-end">
+                      <button type="submit" disabled={isPostingAnnouncement || !newAnnouncement.trim()}
+                        className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:bg-gray-300 transition-all flex items-center gap-1.5">
+                        {isPostingAnnouncement ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} Đăng tin
+                      </button>
+                    </div>
+                  </form>
+                )}
+                <div className="space-y-3">
+                  {announcements.length === 0 ? (
+                    <div className="py-10 text-center text-xs text-gray-400 italic">Chưa có bản tin nào</div>
+                  ) : announcements.map((ann: any, i: number) => (
+                    <div key={i} className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <Avatar name={ann.senderId?.name} size="xs" />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-gray-800">{ann.senderId?.name}</span>
+                            <span className="text-[9px] text-gray-400">{new Date(ann.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <Bell size={12} className="text-blue-500" />
+                      </div>
+                      <div className="text-xs text-gray-700 leading-relaxed break-words">{ann.content}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>

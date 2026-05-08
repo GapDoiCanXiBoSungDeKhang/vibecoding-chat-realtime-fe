@@ -21,6 +21,21 @@ const formatFileSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+const renderMessageContent = (content: string, isMine: boolean) => {
+  if (!content) return null;
+  const parts = content.split(/(@\w+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('@')) {
+          return <span key={i} className={`font-black ${isMine ? 'text-white' : 'text-blue-600'}`}>{part}</span>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+};
+
 
 const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) => {
   const { user } = useAuth();
@@ -47,6 +62,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
   const recordingTimerRef = useRef<number | null>(null);
   const [imageViewer, setImageViewer] = useState<{ images: any[], startIndex: number } | null>(null);
   const [filesQueue, setFilesQueue] = useState<{ file: File, type: 'file' | 'media' }[]>([]);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [showMentionList, setShowMentionList] = useState(false);
+  const [mentionListPosition, setMentionListPosition] = useState({ top: 0, left: 0 });
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [mentionIds, setMentionIds] = useState<Set<string>>(new Set());
+  const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
+  const [showPinnedBar, setShowPinnedBar] = useState(true);
+  const [mentionIndices, setMentionIndices] = useState<number[]>([]);
+  const [currentMentionPointer, setCurrentMentionPointer] = useState(-1);
 
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -104,9 +128,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     },
     onMessagePinned: (payload: any) => {
       setMessages(prev => prev.map(m => m._id === payload.messageId ? { ...m, isPinned: true } : m));
+      fetchPins();
     },
     onMessageUnpinned: (payload: any) => {
       setMessages(prev => prev.map(m => m._id === payload.messageId ? { ...m, isPinned: false } : m));
+      fetchPins();
     },
   });
 
@@ -115,8 +141,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
   }, []);
 
   useEffect(() => {
-    if (activeChat) { fetchChatData(); setIsDropdownOpen(false); setReplyTo(null); setEditingMsg(null); }
+    if (activeChat) { 
+      fetchChatData(); 
+      setIsDropdownOpen(false); 
+      setReplyTo(null); 
+      setEditingMsg(null); 
+      setShowPinnedBar(true);
+      setCurrentMentionPointer(-1);
+    }
   }, [activeChat]);
+
+  useEffect(() => {
+    const indices = messages
+      .map((msg, i) => {
+        const isMentioned = (msg.senderId?._id || msg.senderId) !== user?.sub && 
+                            msg.mentions?.some((m: any) => (m._id || m) === user?.sub);
+        return isMentioned ? i : -1;
+      })
+      .filter(i => i !== -1);
+    setMentionIndices(indices);
+  }, [messages, user?.sub]);
 
   useEffect(() => {
     if (isTyping) scrollToBottom('smooth');
@@ -139,9 +183,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
       setMessages(msgs);
       setHasMore(data.hasMore || false);
       setNextCursor(data.nextCursor || null);
+      fetchPins();
       setTimeout(() => scrollToBottom('auto'), 50);
     } catch { toast.error('Không thể tải cuộc trò chuyện'); }
     finally { setIsLoading(false); }
+  };
+
+  const fetchPins = async () => {
+    if (!activeChat) return;
+    try {
+      const pins = await conversationService.getPins(activeChat);
+      setPinnedMessages(pins);
+    } catch {}
   };
 
   const loadMore = async () => {
@@ -178,8 +231,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
 
     setIsSending(true);
     try {
-      await messageService.sendMessage(activeChat, text, replyTo?._id);
-      setNewMessage(''); setReplyTo(null);
+      // Extract mention IDs from the current message content to be safe
+      // Alternatively, we can use the mentionIds set we built during typing
+      const currentMentions = Array.from(mentionIds).filter(id => {
+        const p = conversationInfo?.participants?.find((p: any) => p.userId?._id === id);
+        return p && text.includes(`@${p.userId?.name}`);
+      });
+
+      await messageService.sendMessage(activeChat, text, replyTo?._id, currentMentions);
+      setNewMessage(''); setReplyTo(null); setMentionIds(new Set());
     } catch { toast.error('Không thể gửi'); }
     finally { setIsSending(false); }
   };
@@ -349,6 +409,53 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     e.target.value = '';
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (editingMsg) {
+      setEditContent(val);
+    } else {
+      setNewMessage(val);
+      
+      // Mention logic
+      const cursor = e.target.selectionStart || 0;
+      const textBefore = val.slice(0, cursor);
+      const mentionMatch = textBefore.match(/@(\w*)$/);
+      
+      if (mentionMatch && conversationInfo?.type === 'group') {
+        setMentionSearch(mentionMatch[1]);
+        setShowMentionList(true);
+        setSelectedMentionIndex(0);
+      } else {
+        setShowMentionList(false);
+      }
+    }
+    notifyTyping();
+  };
+
+  const insertMention = (p: any) => {
+    const cursor = newMessage.lastIndexOf('@');
+    const before = newMessage.slice(0, cursor);
+    const after = newMessage.slice(cursor + mentionSearch.length + 1);
+    const updated = `${before}@${p.userId?.name} ${after}`;
+    setNewMessage(updated);
+    setMentionIds(prev => new Set(prev).add(p.userId?._id));
+    setShowMentionList(false);
+  };
+
+
+  const jumpToMention = () => {
+    if (mentionIndices.length === 0) return;
+    const nextPointer = (currentMentionPointer + 1) % mentionIndices.length;
+    setCurrentMentionPointer(nextPointer);
+    const msgIndex = mentionIndices[nextPointer];
+    const msg = messages[msgIndex];
+    if (msg) {
+      const el = document.getElementById(`msg-${msg._id}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.classList.add('bg-yellow-100/50');
+      setTimeout(() => el?.classList.remove('bg-yellow-100/50'), 2000);
+    }
+  };
 
   const isPrivate = conversationInfo?.type === 'private';
   const headerOther = isPrivate ? conversationInfo?.participants?.find((p: any) => p.userId?._id !== user?.sub)?.userId : null;
@@ -400,6 +507,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
         </div>
       </header>
 
+      {/* Pinned Messages Bar */}
+      {pinnedMessages.length > 0 && showPinnedBar && (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between animate-in slide-in-from-top-1 z-0 shadow-sm">
+          <div className="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer hover:bg-gray-50 p-1 rounded-lg transition-colors"
+            onClick={() => {
+              const msg = messages.find(m => m._id === pinnedMessages[0]._id);
+              if (msg) {
+                const el = document.getElementById(`msg-${msg._id}`);
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el?.classList.add('bg-blue-50/50');
+                setTimeout(() => el?.classList.remove('bg-blue-50/50'), 2000);
+              } else {
+                toast('Tin nhắn cũ hơn đang được tải...');
+              }
+            }}>
+            <Pin size={14} className="text-blue-500 flex-shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Tin nhắn đã ghim</span>
+              <p className="text-xs text-gray-600 truncate">{pinnedMessages[0].content || 'File/Media'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            {pinnedMessages.length > 1 && <span className="text-[10px] text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded-full">+{pinnedMessages.length - 1}</span>}
+            <button onClick={() => setShowPinnedBar(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"><X size={14} /></button>
+          </div>
+        </div>
+      )}
+
       {/* Load More */}
       {hasMore && (
         <div className="flex justify-center py-2 bg-white/80">
@@ -418,6 +553,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           const prev = messages[i - 1];
           const sameAuthor = prev && (prev.senderId?._id || prev.senderId) === (msg.senderId?._id || msg.senderId);
           const isSystem = msg.type === 'system';
+          const isMentioned = !isMine && msg.mentions?.some((m: any) => (m._id || m) === user?.sub);
 
           if (isSystem) return (
             <div key={msg._id || i} className="flex justify-center py-1">
@@ -429,7 +565,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           const grouped = reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
 
           return (
-            <div key={msg._id || i} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group`}>
+            <div id={`msg-${msg._id}`} key={msg._id || i} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group transition-colors duration-500`}>
               <div className={`flex gap-2 max-w-[72%] ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                 {!isMine && (
                   <div className="self-end flex-shrink-0 w-7">
@@ -448,8 +584,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                     </div>
                   )}
                   {/* Bubble */}
-                  <div
-                    className={`relative px-3 py-2 rounded-2xl text-sm shadow-sm ${msg.isDeleted ? 'italic text-gray-400 bg-gray-100' : isMine ? 'bg-blue-500 text-white rounded-br-sm' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-sm'}`}
+                  <div className={`relative px-4 py-2.5 rounded-2xl shadow-sm transition-all ${
+                    isMine 
+                      ? 'bg-blue-600 text-white rounded-tr-none' 
+                      : isMentioned 
+                        ? 'bg-yellow-50 text-gray-800 rounded-tl-none border border-yellow-200' 
+                        : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+                  }`}
                     onContextMenu={e => { e.preventDefault(); if (!msg.isDeleted) setContextMenu({ x: e.clientX, y: e.clientY, msg }); }}
                   >
                     {msg.type === 'file' && !msg.isDeleted ? (
@@ -516,7 +657,27 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                         {msg.callInfo?.duration && <span className="text-xs opacity-70">{Math.round(msg.callInfo.duration / 60)}:{String(msg.callInfo.duration % 60).padStart(2, '0')}</span>}
                       </div>
                     ) : (
-                      <span className="break-words">{msg.content}</span>
+                      <div className="flex flex-col gap-2">
+                        <span className="break-words">
+                          {renderMessageContent(msg.content, isMine)}
+                        </span>
+                        {/* Link Previews */}
+                        {!msg.isDeleted && msg.linkPreviews && msg.linkPreviews.length > 0 && (
+                          <div className="mt-2 space-y-2">
+                            {msg.linkPreviews.map((lp: any, lpi: number) => (
+                              <a key={lpi} href={lp.url} target="_blank" rel="noopener noreferrer" 
+                                className={`block overflow-hidden rounded-xl border ${isMine ? 'bg-white/10 border-white/20' : 'bg-gray-50 border-gray-100'} hover:opacity-90 transition-opacity`}>
+                                {lp.image && <img src={lp.image} alt={lp.title} className="w-full h-32 object-cover" />}
+                                <div className="p-2.5">
+                                  {lp.siteName && <div className={`text-[9px] font-black uppercase tracking-wider mb-1 ${isMine ? 'text-white/70' : 'text-blue-600'}`}>{lp.siteName}</div>}
+                                  <div className={`text-xs font-bold line-clamp-2 mb-1 ${isMine ? 'text-white' : 'text-gray-900'}`}>{lp.title}</div>
+                                  {lp.description && <div className={`text-[10px] line-clamp-2 ${isMine ? 'text-white/70' : 'text-gray-500'}`}>{lp.description}</div>}
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                     {msg.isEdited && !msg.isDeleted && <span className="text-[9px] ml-1 opacity-60">(đã sửa)</span>}
                     {msg.isPinned && <span className="ml-1 text-[9px] opacity-60">📌</span>}
@@ -582,6 +743,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Mention Jump Button */}
+      {mentionIndices.length > 0 && (
+        <button 
+          onClick={jumpToMention}
+          className="absolute bottom-32 right-6 p-3 bg-yellow-500 text-white rounded-full shadow-xl hover:bg-yellow-600 transition-all active:scale-95 flex items-center gap-2 z-30 animate-in fade-in slide-in-from-bottom-4"
+          title="Xem các lượt nhắc tên"
+        >
+          <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center font-black text-sm">@</div>
+          <span className="text-xs font-black pr-1">{mentionIndices.length} nhắc tên</span>
+        </button>
+      )}
 
       {/* Context menu */}
       {contextMenu && contextMenu.x > 0 && (
@@ -670,7 +843,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
             <input
               type="text"
               value={editingMsg ? editContent : newMessage}
-              onChange={e => { editingMsg ? setEditContent(e.target.value) : setNewMessage(e.target.value); notifyTyping(); }}
+              onChange={handleInputChange}
+              onKeyDown={e => {
+                if (showMentionList) {
+                  const filtered = conversationInfo?.participants?.filter((p: any) => 
+                    p.userId?._id !== user?.sub && 
+                    p.userId?.name?.toLowerCase().includes(mentionSearch.toLowerCase())
+                  ) || [];
+                  
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedMentionIndex(prev => (prev + 1) % filtered.length);
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedMentionIndex(prev => (prev - 1 + filtered.length) % filtered.length);
+                  } else if (e.key === 'Enter' && filtered.length > 0) {
+                    e.preventDefault();
+                    insertMention(filtered[selectedMentionIndex]);
+                  } else if (e.key === 'Escape') {
+                    setShowMentionList(false);
+                  }
+                }
+              }}
               placeholder={editingMsg ? 'Chỉnh sửa tin nhắn...' : filesQueue.length > 0 ? 'Nhấn gửi để tải lên các tệp...' : 'Nhập tin nhắn...'}
               className="flex-1 px-4 py-2.5 bg-gray-100 focus:bg-white rounded-xl border border-transparent focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none text-sm transition-all"
               disabled={isSending}
@@ -686,6 +880,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
               {isSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
             </button>
           </form>
+        )}
+
+        {/* Mention List */}
+        {showMentionList && conversationInfo?.participants && (
+          <div className="absolute bottom-full mb-2 left-4 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in slide-in-from-bottom-2">
+            <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</div>
+            <div className="max-h-60 overflow-y-auto">
+              {conversationInfo.participants
+                .filter((p: any) => p.userId?._id !== user?.sub && p.userId?.name?.toLowerCase().includes(mentionSearch.toLowerCase()))
+                .map((p: any, idx: number) => (
+                  <button
+                    key={p.userId?._id}
+                    type="button"
+                    onClick={() => insertMention(p)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${idx === selectedMentionIndex ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <Avatar name={p.userId?.name} size="xs" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-700">{p.userId?.name}</span>
+                      <span className="text-[10px] text-gray-400">@{p.userId?.username || 'user'}</span>
+                    </div>
+                  </button>
+                ))}
+              {conversationInfo.participants.filter((p: any) => p.userId?._id !== user?.sub && p.userId?.name?.toLowerCase().includes(mentionSearch.toLowerCase())).length === 0 && (
+                <div className="px-4 py-3 text-sm text-gray-400 italic">Không tìm thấy thành viên</div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

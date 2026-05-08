@@ -3,7 +3,11 @@ import { useSocket } from '../context/SocketContext';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
-export const useGlobalNotifications = (activeChatId: string | null, onSelectChat?: (id: string) => void) => {
+export const useGlobalNotifications = (
+  activeChatId: string | null, 
+  onSelectChat?: (id: string) => void,
+  onMention?: (id: string) => void
+) => {
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -45,6 +49,41 @@ export const useGlobalNotifications = (activeChatId: string | null, onSelectChat
       }
     };
 
+    const handleMention = (payload: any) => {
+      const msg = payload.message || payload;
+      const conversationId = msg.conversationId?.toString() || msg.conversationId;
+      
+      // Notify listeners about the mention
+      if (onMention) onMention(conversationId);
+
+      // If we are already in this chat, we might not want a toast, 
+      // but mentions are important enough that some apps show them anyway.
+      // Let's show it if we are NOT in the active chat.
+      if (conversationId !== activeChatId) {
+        const senderName = msg.senderId?.name || 'Ai đó';
+        toast((t) => (
+          <div className="flex items-center gap-3 border-l-4 border-yellow-400 pl-2">
+            <div className="flex flex-col">
+              <span className="font-bold text-sm text-yellow-700">@ Bạn được nhắc tên bởi {senderName}</span>
+              <span className="text-xs text-gray-500 truncate max-w-[200px]">{msg.content}</span>
+            </div>
+            <button 
+              onClick={() => {
+                toast.dismiss(t.id);
+                if (onSelectChat) onSelectChat(conversationId);
+              }}
+              className="ml-auto bg-yellow-500 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-yellow-600 transition-colors"
+            >
+              Xem
+            </button>
+          </div>
+        ), {
+          duration: 6000,
+          position: 'top-right',
+        });
+      }
+    };
+
     const events = [
       'new_message',
       'new_message_file',
@@ -55,9 +94,11 @@ export const useGlobalNotifications = (activeChatId: string | null, onSelectChat
     ];
 
     events.forEach(event => socket.on(event, handleNewMessage));
+    socket.on('mention_received', handleMention);
 
     return () => {
       events.forEach(event => socket.off(event, handleNewMessage));
+      socket.off('mention_received', handleMention);
     };
   }, [socket, user, activeChatId]);
 };
