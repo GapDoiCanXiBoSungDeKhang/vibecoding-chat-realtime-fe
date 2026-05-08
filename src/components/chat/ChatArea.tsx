@@ -453,23 +453,27 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                     onContextMenu={e => { e.preventDefault(); if (!msg.isDeleted) setContextMenu({ x: e.clientX, y: e.clientY, msg }); }}
                   >
                     {msg.type === 'file' && !msg.isDeleted ? (
-                      <a href={msg.attachments?.[0]?.url} target="_blank" rel="noopener noreferrer" 
-                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-100 group/file">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover/file:bg-blue-600 group-hover/file:text-white transition-colors">
-                          <FileIcon size={20} />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-gray-800 truncate pr-2">
-                            {msg.attachments?.[0]?.filename || msg.attachments?.[0]?.originalName || 'Tệp đính kèm'}
-                          </span>
-                          <span className="text-[10px] text-gray-500 uppercase flex items-center gap-1">
-                            {msg.attachments?.[0]?.filename?.split('.').pop() || 'FILE'} • {formatFileSize(msg.attachments?.[0]?.size || 0)}
-                          </span>
-                        </div>
-                        <div className="ml-auto opacity-0 group-hover/file:opacity-100 transition-opacity">
-                          <ExternalLink size={14} className="text-gray-400" />
-                        </div>
-                      </a>
+                      <div className="flex flex-col gap-2">
+                        {msg.attachments?.map((a: any, ai: number) => (
+                          <a key={ai} href={a.url} target="_blank" rel="noopener noreferrer" 
+                            className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-100 group/file">
+                            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover/file:bg-blue-600 group-hover/file:text-white transition-colors">
+                              <FileIcon size={20} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-medium text-gray-800 truncate pr-2">
+                                {a.filename || a.originalName || 'Tệp đính kèm'}
+                              </span>
+                              <span className="text-[10px] text-gray-500 uppercase flex items-center gap-1">
+                                {a.filename?.split('.').pop() || 'FILE'} • {formatFileSize(a.size || 0)}
+                              </span>
+                            </div>
+                            <div className="ml-auto opacity-0 group-hover/file:opacity-100 transition-opacity">
+                              <ExternalLink size={14} className="text-gray-400" />
+                            </div>
+                          </a>
+                        ))}
+                      </div>
                     ) : msg.type === 'media' && !msg.isDeleted ? (
                       <div className="grid grid-cols-2 gap-1.5 max-w-[320px]">
                         {msg.attachments?.map((a: any, ai: number) => {

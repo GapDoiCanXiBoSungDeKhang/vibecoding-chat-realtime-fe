@@ -14,9 +14,11 @@ import { ChatLayout } from '../layouts/ChatLayout';
 import { useConversationSocket } from '../hooks/useConversationSocket';
 import { useFriendSocket } from '../hooks/useFriendSocket';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
+import { useSocket } from '../context/SocketContext';
 
 const ChatPage: React.FC = () => {
   const { logout, user } = useAuth();
+  const { joinConversation } = useSocket();
   const [conversations, setConversations] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
   
@@ -45,6 +47,16 @@ const ChatPage: React.FC = () => {
   };
 
   useEffect(() => { fetchConversations(); }, []);
+
+  // Join all conversation rooms when socket is connected or conversations list updates
+  const { isConnected } = useSocket();
+  useEffect(() => {
+    if (isConnected && conversations.length > 0) {
+      conversations.forEach((conv: any) => {
+        joinConversation(conv._id);
+      });
+    }
+  }, [isConnected, conversations, joinConversation]);
 
   useConversationSocket(fetchConversations);
 

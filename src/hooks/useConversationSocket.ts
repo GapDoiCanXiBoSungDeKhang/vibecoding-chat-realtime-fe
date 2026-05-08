@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 
 export const useConversationSocket = (onUpdate: () => void) => {
-  const { socket } = useSocket();
+  const { socket, joinConversation } = useSocket();
 
   useEffect(() => {
     if (!socket) return;
@@ -20,14 +20,23 @@ export const useConversationSocket = (onUpdate: () => void) => {
       'message_seen'
     ];
 
+    const handleEvent = (payload?: any) => {
+      onUpdate();
+      // If a new conversation is detected, ensure we join its room for global notifications
+      const conversationId = payload?.conversation?._id || payload?.conversationId;
+      if (conversationId) {
+        joinConversation(conversationId);
+      }
+    };
+
     events.forEach(event => {
-      socket.on(event, onUpdate);
+      socket.on(event, handleEvent);
     });
 
     return () => {
       events.forEach(event => {
-        socket.off(event, onUpdate);
+        socket.off(event, handleEvent);
       });
     };
-  }, [socket, onUpdate]);
+  }, [socket, onUpdate, joinConversation]);
 };

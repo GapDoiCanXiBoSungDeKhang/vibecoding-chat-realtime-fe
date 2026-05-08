@@ -12,8 +12,8 @@ export const useGlobalNotifications = (activeChatId: string | null, onSelectChat
 
     const handleNewMessage = (payload: any) => {
       const msg = payload.message || payload;
-      const conversationId = msg.conversationId;
-      const senderId = msg.senderId?._id || msg.senderId;
+      const conversationId = msg.conversationId?.toString() || msg.conversationId;
+      const senderId = (msg.senderId?._id || msg.senderId)?.toString();
 
       // Only show notification if:
       // 1. Message is not from current user
@@ -51,6 +51,7 @@ export const useGlobalNotifications = (activeChatId: string | null, onSelectChat
       'new_message_media',
       'new_message_voice',
       'new_message_linkPreview',
+      'new_message_call',
     ];
 
     events.forEach(event => socket.on(event, handleNewMessage));
