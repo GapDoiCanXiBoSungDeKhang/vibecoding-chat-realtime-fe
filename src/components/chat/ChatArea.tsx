@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Phone, Video, MoreVertical, Loader2, Image, File as FileIcon, Mic, MicOff, Smile, Reply, Edit2, Trash2, Forward, Pin, PinOff, X, Check, Info, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Send, Phone, Video, MoreVertical, Loader2, Image, File as FileIcon, Mic, MicOff, Smile, Reply, Edit2, Trash2, Forward, Pin, PinOff, X, Check, Info, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { messageService } from '../../services/messageService';
 import { conversationService } from '../../services/conversationService';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../ui/Avatar';
 import toast from 'react-hot-toast';
 import { useMessageSocket } from '../../hooks/useMessageSocket';
+import type { Message, Conversation, Attachment } from '../../types';
 
 interface ChatAreaProps { activeChat: string | null; onClose?: () => void; onOpenInfo?: () => void; }
 
@@ -23,12 +24,13 @@ const formatFileSize = (bytes: number) => {
 
 const renderMessageContent = (content: string, isMine: boolean) => {
   if (!content) return null;
-  const parts = content.split(/(@\w+)/g);
+  // Regex to match @ followed by characters until space or end of string, supporting Vietnamese
+  const parts = content.split(/(@[^\s@]+)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith('@')) {
-          return <span key={i} className={`font-black ${isMine ? 'text-white' : 'text-blue-600'}`}>{part}</span>;
+          return <span key={i} className={`font-black underline decoration-2 underline-offset-2 ${isMine ? 'text-white decoration-white/40' : 'text-blue-600 decoration-blue-200'}`}>{part}</span>;
         }
         return <span key={i}>{part}</span>;
       })}
@@ -39,35 +41,41 @@ const renderMessageContent = (content: string, isMine: boolean) => {
 
 const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<any[]>([]);
-  const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationInfo, setConversationInfo] = useState<Conversation | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [replyTo, setReplyTo] = useState<any>(null);
-  const [editingMsg, setEditingMsg] = useState<any>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editingMsg, setEditingMsg] = useState<Message | null>(null);
   const [editContent, setEditContent] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; msg: any } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; msg: Message } | null>(null);
   const [emojiPickerMsg, setEmojiPickerMsg] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [forwardMsg, setForwardMsg] = useState<any>(null);
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [forwardTargets, setForwardTargets] = useState<string[]>([]);
 
-  const [allConversations, setAllConversations] = useState<any[]>([]);
+  // Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingTimerRef = useRef<number | null>(null);
-  const [imageViewer, setImageViewer] = useState<{ images: any[], startIndex: number } | null>(null);
+  const [imageViewer, setImageViewer] = useState<{ images: Attachment[], startIndex: number } | null>(null);
   const [filesQueue, setFilesQueue] = useState<{ file: File, type: 'file' | 'media' }[]>([]);
   const [mentionSearch, setMentionSearch] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionListPosition, setMentionListPosition] = useState({ top: 0, left: 0 });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [mentionIds, setMentionIds] = useState<Set<string>>(new Set());
-  const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
+  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [showPinnedBar, setShowPinnedBar] = useState(true);
   const [mentionIndices, setMentionIndices] = useState<number[]>([]);
   const [currentMentionPointer, setCurrentMentionPointer] = useState(-1);
@@ -179,10 +187,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
         messageService.getMessages(activeChat!, 30),
       ]);
       setConversationInfo(info);
-      const msgs = data.messages || data;
-      setMessages(msgs);
-      setHasMore(data.hasMore || false);
-      setNextCursor(data.nextCursor || null);
+      setMessages(data.messages);
+      setHasMore(data.hasMore);
+      setNextCursor(data.nextCursor);
       fetchPins();
       setTimeout(() => scrollToBottom('auto'), 50);
     } catch { toast.error('Không thể tải cuộc trò chuyện'); }
@@ -202,9 +209,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setLoadingMore(true);
     try {
       const data = await messageService.getMessages(activeChat!, 30, nextCursor);
-      setMessages(prev => [...(data.messages || []), ...prev]);
-      setHasMore(data.hasMore || false);
-      setNextCursor(data.nextCursor || null);
+      setMessages(prev => [...data.messages, ...prev]);
+      setHasMore(data.hasMore);
+      setNextCursor(data.nextCursor);
     } catch {} finally { setLoadingMore(false); }
   };
 
@@ -280,17 +287,40 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
 
   const handleReact = async (msgId: string, emoji: string) => {
     try {
-      await messageService.reactMessage(activeChat!, msgId, emoji);
+      await messageService.reactToMessage(activeChat!, msgId, emoji);
       setMessages(prev => prev.map(m => {
-        if (m._id !== msgId) return m;
-        const reactions = (m.reactions || []).filter((r: any) => r.userId !== user?.sub);
-        return { ...m, reactions: [...reactions, { userId: user?.sub, emoji }] };
+        if (m._id === msgId) {
+          const reactions = [...(m.reactions || [])];
+          const idx = reactions.findIndex(r => {
+            const rUserId = typeof r.userId === 'object' ? r.userId._id : r.userId;
+            return rUserId === user?.sub;
+          });
+          if (idx > -1) reactions[idx].emoji = emoji;
+          else reactions.push({ userId: user!.sub, emoji });
+          return { ...m, reactions };
+        }
+        return m;
       }));
     } catch { toast.error('Không thể thả cảm xúc'); }
     setEmojiPickerMsg(null);
   };
 
-  const handlePin = async (msg: any) => {
+  const handleUnreact = async (msgId: string) => {
+    try {
+      await messageService.unreactFromMessage(activeChat!, msgId);
+      setMessages(prev => prev.map(m => {
+        if (m._id === msgId) {
+          return { ...m, reactions: m.reactions?.filter(r => {
+            const rUserId = typeof r.userId === 'object' ? r.userId._id : r.userId;
+            return rUserId !== user?.sub;
+          }) };
+        }
+        return m;
+      }));
+    } catch { toast.error('Không thể bỏ cảm xúc'); }
+  };
+
+  const handlePin = async (msg: Message) => {
     try {
       await messageService.pinMessage(activeChat!, msg._id);
       setMessages(prev => prev.map(m => m._id === msg._id ? { ...m, isPinned: true } : m));
@@ -299,7 +329,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setContextMenu(null);
   };
 
-  const handleUnpin = async (msg: any) => {
+  const handleUnpin = async (msg: Message) => {
     try {
       await messageService.unpinMessage(activeChat!, msg._id);
       setMessages(prev => prev.map(m => m._id === msg._id ? { ...m, isPinned: false } : m));
@@ -308,15 +338,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setContextMenu(null);
   };
 
-  const handleUnreact = async (msgId: string) => {
-    try {
-      await messageService.unreactMessage(activeChat!, msgId);
-      setMessages(prev => prev.map(m => {
-        if (m._id !== msgId) return m;
-        return { ...m, reactions: (m.reactions || []).filter((r: any) => (r.userId?._id || r.userId) !== user?.sub) };
-      }));
-    } catch { toast.error('Không thể bỏ cảm xúc'); }
-  };
+
 
   const handleForward = async () => {
     if (!forwardMsg || !forwardTargets.length || !activeChat) return;
@@ -327,13 +349,40 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setForwardMsg(null); setForwardTargets([]);
   };
 
-  const openForwardModal = async (msg: any) => {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim() || !activeChat) return;
+    setIsSearching(true);
+    try {
+      const results = await messageService.searchMessages(activeChat, searchQuery);
+      setSearchResults(results);
+      if (results.length === 0) {
+        toast('Không tìm thấy tin nhắn nào', { icon: '🔍' });
+      }
+    } catch {
+      toast.error('Lỗi khi tìm kiếm');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-blue-50/50');
+      setTimeout(() => el.classList.remove('bg-blue-50/50'), 2000);
+    } else {
+      toast('Tin nhắn quá cũ, vui lòng cuộn lên để tải thêm');
+    }
+  };
+
+  const openForwardModal = async (msg: Message) => {
     setForwardMsg(msg);
     setContextMenu(null);
     try {
-      const { conversationService } = await import('../../services/conversationService');
       const convs = await conversationService.getConversations();
-      setAllConversations(convs.filter((c: any) => c._id !== activeChat));
+      setAllConversations(convs.filter((c: Conversation) => c._id !== activeChat));
     } catch {}
   };
 
@@ -419,7 +468,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
       // Mention logic
       const cursor = e.target.selectionStart || 0;
       const textBefore = val.slice(0, cursor);
-      const mentionMatch = textBefore.match(/@(\w*)$/);
+      // Support Vietnamese and characters other than space/@
+      const mentionMatch = textBefore.match(/@([^@\s]*)$/);
       
       if (mentionMatch && conversationInfo?.type === 'group') {
         setMentionSearch(mentionMatch[1]);
@@ -433,11 +483,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
   };
 
   const insertMention = (p: any) => {
-    const cursor = newMessage.lastIndexOf('@');
-    const before = newMessage.slice(0, cursor);
-    const after = newMessage.slice(cursor + mentionSearch.length + 1);
+    const val = editingMsg ? editContent : newMessage;
+    const cursor = val.lastIndexOf('@' + mentionSearch);
+    if (cursor === -1) return;
+    
+    const before = val.slice(0, cursor);
+    const after = val.slice(cursor + mentionSearch.length + 1);
     const updated = `${before}@${p.userId?.name} ${after}`;
-    setNewMessage(updated);
+    
+    if (editingMsg) setEditContent(updated);
+    else setNewMessage(updated);
+    
     setMentionIds(prev => new Set(prev).add(p.userId?._id));
     setShowMentionList(false);
   };
@@ -485,6 +541,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <button 
+            onClick={() => { setIsSearchOpen(!isSearchOpen); setSearchQuery(''); setSearchResults([]); }} 
+            className={`p-2 rounded-full transition-colors ${isSearchOpen ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`} 
+            title="Tìm kiếm tin nhắn"
+          >
+            <Search size={18} />
+          </button>
           <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors" title="Gọi thoại"><Phone size={18} /></button>
           <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors" title="Gọi video"><Video size={18} /></button>
           <div className="w-px h-5 bg-gray-200 mx-1" />
@@ -497,8 +560,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                   <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Thêm thành viên</button>
                   <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Quản lý thành viên</button>
                   <div className="h-px bg-gray-100 my-1" />
-                  <button onClick={async () => { await conversationService.leaveGroup(user!.sub, user!.name, activeChat!); onClose?.(); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Rời nhóm</button>
-                  {currentUserRole === 'owner' && <button onClick={async () => { await conversationService.disbandGroup(user!.sub, activeChat!); onClose?.(); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold">Giải tán nhóm</button>}
+                  <button onClick={async () => { await conversationService.leaveGroup(activeChat!); onClose?.(); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Rời nhóm</button>
+                  {currentUserRole === 'owner' && <button onClick={async () => { await conversationService.disbandGroup(activeChat!); onClose?.(); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold">Giải tán nhóm</button>}
                 </>)}
                 {isPrivate && <button onClick={async () => { await conversationService.removeConversation(activeChat!); onClose?.(); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Xóa trò chuyện</button>}
               </div>
@@ -506,6 +569,50 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           </div>
         </div>
       </header>
+
+      {/* Search Bar */}
+      {isSearchOpen && (
+        <div className="bg-white border-b border-gray-100 p-3 animate-in slide-in-from-top-2 z-10 shadow-sm">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+              <input 
+                type="text" 
+                autoFocus
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm nội dung tin nhắn..." 
+                className="w-full pl-9 pr-4 py-2 bg-gray-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 border border-transparent focus:border-blue-500/50 transition-all"
+              />
+            </div>
+            <button type="submit" disabled={isSearching} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2">
+              {isSearching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Tìm
+            </button>
+            <button type="button" onClick={() => setIsSearchOpen(false)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">
+              <X size={18} />
+            </button>
+          </form>
+          
+          {searchResults.length > 0 && (
+            <div className="mt-3 max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 mb-2">Kết quả ({searchResults.length})</div>
+              {searchResults.map(msg => (
+                <button 
+                  key={msg._id} 
+                  onClick={() => scrollToMessage(msg._id)}
+                  className="w-full text-left p-2 hover:bg-blue-50 rounded-lg flex flex-col gap-0.5 group transition-colors border border-transparent hover:border-blue-100"
+                >
+                  <div className="flex justify-between items-center w-full">
+                    <span className="text-xs font-bold text-gray-800">{msg.senderId?.name}</span>
+                    <span className="text-[9px] text-gray-400">{formatTime(msg.createdAt)}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 line-clamp-1 italic">"{msg.content}"</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Pinned Messages Bar */}
       {pinnedMessages.length > 0 && showPinnedBar && (
@@ -562,7 +669,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           );
 
           const reactions = msg.reactions || [];
-          const grouped = reactions.reduce((acc: any, r: any) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
+          const grouped = reactions.reduce((acc: Record<string, number>, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {});
 
           return (
             <div id={`msg-${msg._id}`} key={msg._id || i} className={`flex ${isMine ? 'justify-end' : 'justify-start'} group transition-colors duration-500`}>
@@ -620,11 +727,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                         {msg.attachments?.map((a: any, ai: number) => {
                           const isSingle = msg.attachments.length === 1;
                           return (
-                            <div key={ai} className={`relative group/media overflow-hidden rounded-xl border border-gray-100 bg-gray-50 ${isSingle ? 'col-span-2' : 'col-span-1'}`}>
-                              <img src={a.url} alt="media" 
-                                className="w-full h-full max-h-64 object-cover cursor-pointer hover:scale-105 transition-transform duration-300" 
-                                onClick={() => setImageViewer({ images: msg.attachments, startIndex: ai })}
-                              />
+                            <div key={ai} className={`relative group/media overflow-hidden rounded-xl border border-gray-100 bg-black shadow-inner ${isSingle ? 'col-span-2' : 'col-span-1'}`}>
+                              {(a.type === 'video' || a.mimetype?.startsWith('video/') || a.mimeType?.startsWith('video/')) ? (
+                                <video 
+                                  src={a.url} 
+                                  controls 
+                                  preload="metadata"
+                                  className="w-full h-full max-h-80 object-contain mx-auto"
+                                />
+                              ) : (
+                                <img src={a.url} alt="media" 
+                                  className="w-full h-full max-h-80 object-cover cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                  onClick={() => setImageViewer({ images: msg.attachments, startIndex: ai })}
+                                />
+                              )}
                               <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-black/40 translate-y-full group-hover/media:translate-y-0 transition-transform flex justify-between items-center">
                                 <span className="text-[9px] text-white font-medium truncate pr-2">{a.filename || a.originalName || 'Image'}</span>
                                 <span className="text-[9px] text-white/80 flex-shrink-0">{formatFileSize(a.size || 0)}</span>
@@ -705,7 +821,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                   {Object.keys(grouped).length > 0 && (
                     <div className={`flex flex-wrap gap-0.5 mt-0.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
                       {Object.entries(grouped).map(([em, cnt]) => {
-                        const myReaction = (msg.reactions || []).find((r: any) => (r.userId?._id || r.userId) === user?.sub && r.emoji === em);
+                        const myReaction = (msg.reactions || []).find((r) => {
+                          const rUserId = typeof r.userId === 'object' ? r.userId._id : r.userId;
+                          return rUserId === user?.sub && r.emoji === em;
+                        });
                         return (
                           <button key={em} onClick={() => myReaction ? handleUnreact(msg._id) : handleReact(msg._id, em)}
                             className={`text-xs border rounded-full px-1.5 py-0.5 shadow-sm transition-colors ${myReaction ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
@@ -796,6 +915,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
                     <div className="w-12 h-12 rounded-lg bg-white border border-blue-200 flex items-center justify-center overflow-hidden shadow-sm">
                       {item.type === 'media' && item.file.type.startsWith('image/') ? (
                         <img src={URL.createObjectURL(item.file)} className="w-full h-full object-cover" alt="preview" />
+                      ) : item.type === 'media' && item.file.type.startsWith('video/') ? (
+                        <div className="relative w-full h-full bg-black flex items-center justify-center">
+                          <video src={URL.createObjectURL(item.file)} className="w-full h-full object-cover opacity-60" />
+                          <Video size={16} className="absolute text-white" />
+                        </div>
                       ) : (
                         <FileIcon size={20} className="text-blue-500" />
                       )}
@@ -818,8 +942,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
       )}
 
       {/* Input */}
-      <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
-        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => handleFileUpload(e, 'file')} />
+      <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0 relative">
+        <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" className="hidden" onChange={e => handleFileUpload(e, 'file')} />
         <input ref={mediaInputRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={e => handleFileUpload(e, 'media')} />
         
         {isRecording ? (
@@ -882,13 +1006,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
           </form>
         )}
 
-        {/* Mention List */}
-        {showMentionList && conversationInfo?.participants && (
-          <div className="absolute bottom-full mb-2 left-4 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in slide-in-from-bottom-2">
-            <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</div>
-            <div className="max-h-60 overflow-y-auto">
-              {conversationInfo.participants
-                .filter((p: any) => p.userId?._id !== user?.sub && p.userId?.name?.toLowerCase().includes(mentionSearch.toLowerCase()))
+      {/* Mention List */}
+      {showMentionList && conversationInfo?.type === 'group' && (
+        <div className="absolute bottom-full left-4 mb-2 w-72 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[60] animate-in slide-in-from-bottom-2">
+          <div className="px-4 py-2 text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-gray-50 mb-1">Nhắc tên thành viên</div>
+          <div className="max-h-64 overflow-y-auto custom-scrollbar">
+            {conversationInfo.participants
+              ?.filter((p: any) => 
+                p.userId?._id !== user?.sub && 
+                (p.userId?.name?.toLowerCase().includes(mentionSearch.toLowerCase()) || mentionSearch === '')
+              )
                 .map((p: any, idx: number) => (
                   <button
                     key={p.userId?._id}
@@ -985,11 +1112,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
             >
               <ChevronLeft size={28} />
             </button>
-            <img 
-              src={imageViewer.images[imageViewer.startIndex]?.url || imageViewer.images[imageViewer.startIndex]?.fileUrl} 
-              alt="viewer" 
-              className="max-w-full max-h-[85vh] object-contain rounded-sm shadow-2xl"
-            />
+            {(imageViewer.images[imageViewer.startIndex]?.type === 'video' || imageViewer.images[imageViewer.startIndex]?.mimetype?.startsWith('video/') || imageViewer.images[imageViewer.startIndex]?.mimeType?.startsWith('video/')) ? (
+              <video 
+                src={imageViewer.images[imageViewer.startIndex]?.url || imageViewer.images[imageViewer.startIndex]?.fileUrl} 
+                controls 
+                autoPlay
+                className="max-w-full max-h-[85vh] object-contain rounded-sm shadow-2xl"
+              />
+            ) : (
+              <img 
+                src={imageViewer.images[imageViewer.startIndex]?.url || imageViewer.images[imageViewer.startIndex]?.fileUrl} 
+                alt="viewer" 
+                className="max-w-full max-h-[85vh] object-contain rounded-sm shadow-2xl"
+              />
+            )}
             <button 
               className="absolute right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full disabled:opacity-0 transition-all"
               disabled={imageViewer.startIndex === imageViewer.images.length - 1}
