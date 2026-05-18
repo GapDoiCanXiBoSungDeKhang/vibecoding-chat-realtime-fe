@@ -14,7 +14,9 @@ export const useGlobalNotifications = (
   useEffect(() => {
     if (!socket || !user) return;
 
-    const handleNewMessage = (payload: any) => {
+    const handleNewMessage = (data: any) => {
+      const payload = data?.payload;
+      if (!payload) return;
       const msg = payload.message || payload;
       const conversationId = msg.conversationId?.toString() || msg.conversationId;
       const senderId = (msg.senderId?._id || msg.senderId)?.toString();
@@ -84,20 +86,11 @@ export const useGlobalNotifications = (
       }
     };
 
-    const events = [
-      'new_message',
-      'new_message_file',
-      'new_message_media',
-      'new_message_voice',
-      'new_message_linkPreview',
-      'new_message_call',
-    ];
-
-    events.forEach(event => socket.on(event, handleNewMessage));
+    socket.on('conversation_updated', handleNewMessage);
     socket.on('mention_received', handleMention);
 
     return () => {
-      events.forEach(event => socket.off(event, handleNewMessage));
+      socket.off('conversation_updated', handleNewMessage);
       socket.off('mention_received', handleMention);
     };
   }, [socket, user, activeChatId]);

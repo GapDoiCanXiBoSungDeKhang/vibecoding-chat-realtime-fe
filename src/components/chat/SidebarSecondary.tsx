@@ -177,7 +177,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                               {new Date(conv.lastMessage.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
-                          {conv.unreadCount > 0 && (
+                          {conv.unreadCount > 0 && !isActive && (
                             <div className="min-w-[16px] h-4 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1">
                               {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                             </div>

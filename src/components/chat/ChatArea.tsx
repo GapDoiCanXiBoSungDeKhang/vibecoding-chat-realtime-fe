@@ -95,7 +95,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, onClose, onOpenInfo }) 
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
-  }, []);
+
+    const senderId = (msg.senderId?._id || msg.senderId)?.toString();
+    if (activeChat && senderId !== user?.sub) {
+      messageService.markAsSeen(activeChat).catch(() => {});
+    }
+  }, [activeChat, user?.sub]);
 
   const { isTyping, notifyTyping, stopTyping } = useMessageSocket({
     activeChat,
