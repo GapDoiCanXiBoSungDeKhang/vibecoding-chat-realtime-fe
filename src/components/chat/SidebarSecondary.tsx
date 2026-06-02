@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Search,
     MessageCircle,
@@ -17,6 +18,7 @@ import {
 import Avatar from "../ui/Avatar";
 import { conversationService } from "../../services/conversationService";
 import toast from "react-hot-toast";
+
 
 interface SidebarSecondaryProps {
     currentView: "chats" | "contacts";
@@ -45,6 +47,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
     onRefresh,
     unreadMentions = new Set(),
 }) => {
+    const navigate = useNavigate();
     const [contextMenu, setContextMenu] = useState<{
         x: number;
         y: number;
@@ -90,10 +93,13 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
         setContextMenu({ x, y, conv, isArchived });
     };
 
-    const exec = async (fn: () => Promise<void>, successMsg: string) => {
+    const exec = async (fn: () => Promise<void>, successMsg: string, isDestructive = false) => {
         try {
             await fn();
             toast.success(successMsg);
+            if (isDestructive && contextMenu?.conv._id === activeChatId) {
+                navigate("/chat");
+            }
             onRefresh?.();
         } catch {
             toast.error("Có lỗi xảy ra");
@@ -538,6 +544,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                                 contextMenu.conv._id,
                                             ),
                                         "Đã rời nhóm",
+                                        true
                                     )
                                 }
                                 className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
@@ -553,6 +560,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                                     contextMenu.conv._id,
                                                 ),
                                             "Đã giải tán nhóm",
+                                            true
                                         )
                                     }
                                     className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors font-bold"
@@ -573,6 +581,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                             contextMenu.conv._id,
                                         ),
                                     "Đã xóa trò chuyện",
+                                    true
                                 )
                             }
                             className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"

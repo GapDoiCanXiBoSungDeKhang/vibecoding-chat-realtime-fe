@@ -48,8 +48,8 @@ api.interceptors.response.use(
       });
     }
 
-    // Handle 401/403 Auth Errors for redirection
-    if (response?.status === 401 || response?.status === 403) {
+    // Handle 401 Auth Errors for redirection
+    if (response?.status === 401) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       // Use window.location to force a clean state redirect
