@@ -4,8 +4,8 @@ import toast from 'react-hot-toast';
 
 interface UseFriendSocketOptions {
   onUpdate: () => void;
-  /** Called when user B accepts A's request. Receives the new conversationId so we can open it. */
   onAccepted?: (conversationId: string, friendName: string) => void;
+  onReceived?: () => void; // NEW: callback khi B nhận friend request
 }
 
 export const useFriendSocket = (
@@ -13,7 +13,6 @@ export const useFriendSocket = (
 ) => {
   const { socket } = useSocket();
 
-  // Normalise: allow passing just a callback OR an options object
   const onUpdate =
     typeof onUpdateOrOptions === 'function'
       ? onUpdateOrOptions
@@ -24,16 +23,16 @@ export const useFriendSocket = (
       ? onUpdateOrOptions.onAccepted
       : undefined;
 
+  const onReceived =
+    typeof onUpdateOrOptions === 'object'
+      ? onUpdateOrOptions.onReceived
+      : undefined;
+
   const stableOnUpdate = useCallback(onUpdate, []);
 
   useEffect(() => {
     if (!socket) return;
 
-    /**
-     * friend_request_received
-     * Payload: { request: { _id, from: { _id, name, avatar }, message, createdAt } }
-     * Emitted to: user B (the recipient)
-     */
     const handleReceived = (payload: any) => {
       const senderName = payload?.request?.from?.name || 'Ai đó';
       const message = payload?.request?.message;
@@ -45,21 +44,17 @@ export const useFriendSocket = (
       });
 
       stableOnUpdate();
+      onReceived?.(); // NEW
     };
 
-    /**
-     * friend_request_accepted
-     * Payload: { friend: { _id, name, avatar, status }, conversationId }
-     * Emitted to: user A (the original sender — their request was just accepted)
-     */
     const handleAccepted = (payload: any) => {
       const friendName = payload?.friend?.name || 'Bạn bè';
       const conversationId = payload?.conversationId;
 
-      toast.success(
-        `${friendName} đã chấp nhận lời mời kết bạn!`,
-        { duration: 5000, icon: '🎉' }
-      );
+      toast.success(`${friendName} đã chấp nhận lời mời kết bạn!`, {
+        duration: 5000,
+        icon: '🎉',
+      });
 
       stableOnUpdate();
 
@@ -68,11 +63,6 @@ export const useFriendSocket = (
       }
     };
 
-    /**
-     * friend_request_rejected
-     * No meaningful payload — backend doesn't emit to sender on reject.
-     * Triggered locally when user B presses reject (optimistic UI update).
-     */
     const handleRejected = () => {
       stableOnUpdate();
     };
@@ -86,5 +76,5 @@ export const useFriendSocket = (
       socket.off('friend_request_accepted', handleAccepted);
       socket.off('friend_request_rejected', handleRejected);
     };
-  }, [socket, stableOnUpdate, onAccepted]);
+  }, [socket, stableOnUpdate, onAccepted, onReceived]);
 };

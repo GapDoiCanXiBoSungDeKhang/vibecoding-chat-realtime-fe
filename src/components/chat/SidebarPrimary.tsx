@@ -16,6 +16,7 @@ interface SidebarPrimaryProps {
     onOpenSettings: () => void;
     onLogout: () => void;
     isSettingsOpen: boolean;
+    pendingFriendCount?: number; // NEW
 }
 
 const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
@@ -25,6 +26,7 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
     onOpenSettings,
     onLogout,
     isSettingsOpen,
+    pendingFriendCount = 0,
 }) => {
     return (
         <aside className="w-[58px] h-full bg-[#0068ff] flex flex-col items-center py-4 flex-shrink-0 z-50 shadow-xl">
@@ -56,14 +58,23 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
                     )}
                 </button>
+
+                {/* Contacts button với badge */}
                 <button
                     onClick={() => setCurrentView("contacts")}
                     className={`w-full py-3 flex justify-center transition-all relative group ${currentView === "contacts" ? "bg-[#005ae0] text-white" : "text-white/70 hover:bg-white/10"}`}
                 >
-                    <Users
-                        size={22}
-                        className="group-hover:scale-110 transition-transform"
-                    />
+                    <div className="relative">
+                        <Users
+                            size={22}
+                            className="group-hover:scale-110 transition-transform"
+                        />
+                        {pendingFriendCount > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                                {pendingFriendCount > 99 ? "99+" : pendingFriendCount}
+                            </span>
+                        )}
+                    </div>
                     {currentView === "contacts" && (
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
                     )}

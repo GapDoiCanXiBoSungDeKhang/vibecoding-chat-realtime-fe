@@ -13,6 +13,7 @@ import { useConversationSocket } from "../hooks/useConversationSocket";
 import { useFriendSocket } from "../hooks/useFriendSocket";
 import { useGlobalNotifications } from "../hooks/useGlobalNotifications";
 import { useSocket } from "../context/SocketContext";
+import { friendService } from "../services/friendService";
 
 const ChatPage: React.FC = () => {
     const { logout, user } = useAuth();
@@ -31,6 +32,7 @@ const ChatPage: React.FC = () => {
 
     const [prevActiveChat, setPrevActiveChat] = useState<string | null>(null);
     const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
+    const [pendingFriendCount, setPendingFriendCount] = useState(0);
 
     useGlobalNotifications(
         activeChat,
@@ -48,6 +50,20 @@ const ChatPage: React.FC = () => {
     const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
     const [isCreatePrivateOpen, setIsCreatePrivateOpen] = useState(false);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
+
+    // Fetch pending friend requests count on mount
+    useEffect(() => {
+        friendService.getFriendRequests()
+            .then((data) => setPendingFriendCount(data?.length ?? 0))
+            .catch(() => { });
+    }, []);
+
+    // Reset badge khi user vào tab contacts
+    useEffect(() => {
+        if (currentView === "contacts") {
+            setPendingFriendCount(0);
+        }
+    }, [currentView]);
 
     const fetchConversations = async () => {
         try {
@@ -77,6 +93,12 @@ const ChatPage: React.FC = () => {
 
     useFriendSocket({
         onUpdate: fetchConversations,
+        onReceived: () => {
+            // Chỉ tăng badge nếu user không đang ở tab contacts
+            if (currentView !== "contacts") {
+                setPendingFriendCount((prev) => prev + 1);
+            }
+        },
         onAccepted: async (conversationId) => {
             await fetchConversations();
             navigate("/chat/" + conversationId);
@@ -136,6 +158,7 @@ const ChatPage: React.FC = () => {
                     onOpenSettings={() => setIsSettingsOpen(true)}
                     onLogout={logout}
                     isSettingsOpen={isSettingsOpen}
+                    pendingFriendCount={pendingFriendCount}
                 />
             }
             secondarySidebar={
@@ -200,4 +223,3 @@ const ChatPage: React.FC = () => {
 };
 
 export default ChatPage;
-
