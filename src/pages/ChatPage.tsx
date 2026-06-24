@@ -134,6 +134,18 @@ const ChatPage: React.FC = () => {
             }));
             setReloadPendingTrigger(prev => prev + 1);
         },
+        onRequestHandled: (payload) => {
+            const cid = payload?.conversationId;
+            if (!cid) return;
+            // Xóa badge pending cho conversation này
+            setPendingGroupRequests(prev => {
+                const next = { ...prev };
+                delete next[cid];
+                return next;
+            });
+            // Trigger reload pending list trong ConversationPanel
+            setReloadPendingTrigger(prev => prev + 1);
+        },
         onForceLeave: (cid, reason) => {
             // Nếu đang mở đúng conversation bị xóa/rời/giải tán → navigate ra
             if (activeChat === cid || window.location.pathname.includes(cid)) {
