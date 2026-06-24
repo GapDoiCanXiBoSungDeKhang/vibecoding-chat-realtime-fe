@@ -543,32 +543,30 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
 
                     <div className="h-px bg-gray-100 my-1" />
 
-                    {/* Group-specific */}
+                    {/* Group-specific — đồng bộ role logic với ConversationPanel */}
                     {contextMenu.conv.type === "group" && (
                         <>
-                            <button
-                                onClick={() =>
-                                    exec(
-                                        () =>
-                                            conversationService.leaveGroup(
-                                                contextMenu.conv._id,
-                                            ),
-                                        "Đã rời nhóm",
-                                        true
-                                    )
-                                }
-                                className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
-                            >
-                                <LogOut size={14} /> Rời nhóm
-                            </button>
+                            {/* Member/Admin: rời nhóm. Owner: không có nút này */}
+                            {!isOwner(contextMenu.conv) && (
+                                <button
+                                    onClick={() =>
+                                        exec(
+                                            () => conversationService.leaveGroup(contextMenu.conv._id),
+                                            "Đã rời nhóm",
+                                            true
+                                        )
+                                    }
+                                    className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                                >
+                                    <LogOut size={14} /> Rời nhóm
+                                </button>
+                            )}
+                            {/* Owner only: giải tán nhóm */}
                             {isOwner(contextMenu.conv) && (
                                 <button
                                     onClick={() =>
                                         exec(
-                                            () =>
-                                                conversationService.disbandGroup(
-                                                    contextMenu.conv._id,
-                                                ),
+                                            () => conversationService.disbandGroup(contextMenu.conv._id),
                                             "Đã giải tán nhóm",
                                             true
                                         )

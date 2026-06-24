@@ -235,26 +235,25 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
         if (!confirm("Bạn có chắc muốn rời nhóm?")) return;
         try {
             await conversationService.leaveGroup(conversationId);
-            toast.success("Đã rời nhóm");
-            onConversationAction?.();
-        } catch {
-            toast.error("Thao tác thất bại");
+            // Socket group_left_self sẽ trigger navigate — không cần gọi onConversationAction ở đây
+            // để tránh race condition navigate 2 lần
+        } catch (err: any) {
+            const msg = err?.response?.data?.message;
+            if (msg?.includes("owner")) {
+                toast.error("Trưởng nhóm không thể rời nhóm. Hãy giải tán hoặc chuyển quyền trước.");
+            } else {
+                toast.error("Không thể rời nhóm");
+            }
         }
     };
 
     const handleDisband = async () => {
-        if (
-            !confirm(
-                "Bạn có chắc muốn giải tán nhóm? Hành động này không thể hoàn tác.",
-            )
-        )
-            return;
+        if (!confirm("Bạn có chắc muốn giải tán nhóm? Hành động này không thể hoàn tác.")) return;
         try {
             await conversationService.disbandGroup(conversationId);
-            toast.success("Đã giải tán nhóm");
-            onConversationAction?.();
+            // Socket group_dissolved sẽ trigger navigate cho tất cả members
         } catch {
-            toast.error("Thao tác thất bại");
+            toast.error("Không thể giải tán nhóm");
         }
     };
 
@@ -432,9 +431,10 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                         </div>
                                     </div>
                                 )}
-                                {/* Danger zone */}
+                                {/* Danger zone — đồng bộ logic role */}
                                 <div className="mt-4 pt-4 border-t border-gray-100 space-y-1">
-                                    {isGroup && (
+                                    {/* Member và admin: rời nhóm. Owner: không có nút này */}
+                                    {isGroup && !isOwner && (
                                         <button
                                             onClick={handleLeave}
                                             className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-600 hover:bg-red-50 rounded-xl transition-colors"
@@ -442,6 +442,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                             <LogOut size={14} /> Rời nhóm
                                         </button>
                                     )}
+                                    {/* Owner only: giải tán nhóm */}
                                     {isGroup && isOwner && (
                                         <button
                                             onClick={handleDisband}
@@ -453,10 +454,12 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                     {isPrivate && (
                                         <button
                                             onClick={async () => {
-                                                await conversationService.removeConversation(
-                                                    conversationId,
-                                                );
-                                                onConversationAction?.();
+                                                try {
+                                                    await conversationService.removeConversation(conversationId);
+                                                    onConversationAction?.();
+                                                } catch {
+                                                    toast.error("Không thể xóa trò chuyện");
+                                                }
                                             }}
                                             className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                                         >
@@ -726,8 +729,9 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                                                     try {
                                                                         await conversationService.handleJoinRequest(conversationId, req._id, "accept");
                                                                         toast.success(`Đã chấp nhận ${req.userId?.name}`);
-                                                                        loadPendingRequests();
-                                                                        onRefresh?.();
+                                                                        // Xóa khỏi list pending ngay lập tức (optimistic)
+                                                                        setPendingRequests(prev => prev.filter(r => r._id !== req._id));
+                                                                        onRefresh?.(); // socket group_request_handled sẽ broadcast cho tất cả
                                                                     } catch { toast.error("Thao tác thất bại"); }
                                                                 }}
                                                                 className="px-2 py-1 text-[10px] font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
@@ -739,7 +743,8 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                                                     try {
                                                                         await conversationService.handleJoinRequest(conversationId, req._id, "reject");
                                                                         toast.success("Đã từ chối");
-                                                                        loadPendingRequests();
+                                                                        // Xóa khỏi list pending ngay lập tức (optimistic)
+                                                                        setPendingRequests(prev => prev.filter(r => r._id !== req._id));
                                                                     } catch { toast.error("Thao tác thất bại"); }
                                                                 }}
                                                                 className="px-2 py-1 text-[10px] font-bold bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-600 rounded-lg transition-colors"

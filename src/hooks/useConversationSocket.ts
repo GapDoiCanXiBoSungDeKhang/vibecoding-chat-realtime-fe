@@ -4,6 +4,8 @@ import { useSocket } from '../context/SocketContext';
 interface UseConversationSocketOptions {
   onUpdate: () => void;
   onJoinRequested?: (payload: any) => void;
+  // Callback khi user bị kick/rời/nhóm bị giải tán — để navigate ra ngoài
+  onForceLeave?: (conversationId: string, reason: 'dissolved' | 'removed' | 'left') => void;
 }
 
 export const useConversationSocket = (
@@ -11,10 +13,9 @@ export const useConversationSocket = (
 ) => {
   const { socket, joinConversation } = useSocket();
 
-  // Dùng ref để tránh stale closure — callback luôn là phiên bản mới nhất
-  // mà không cần re-register socket listener mỗi lần render
   const onUpdateRef = useRef<() => void>(() => {});
   const onJoinRequestedRef = useRef<((payload: any) => void) | undefined>(undefined);
+  const onForceLeaveRef = useRef<UseConversationSocketOptions['onForceLeave'] | undefined>(undefined);
 
   useEffect(() => {
     onUpdateRef.current =
@@ -22,21 +23,19 @@ export const useConversationSocket = (
         ? onUpdateOrOptions
         : onUpdateOrOptions.onUpdate;
 
-    onJoinRequestedRef.current =
-      typeof onUpdateOrOptions === 'object'
-        ? onUpdateOrOptions.onJoinRequested
-        : undefined;
+    if (typeof onUpdateOrOptions === 'object') {
+      onJoinRequestedRef.current = onUpdateOrOptions.onJoinRequested;
+      onForceLeaveRef.current = onUpdateOrOptions.onForceLeave;
+    }
   });
 
   useEffect(() => {
     if (!socket) return;
 
-    const generalEvents = [
+    // Events thông thường — chỉ cần refresh list
+    const normalEvents = [
       'group_created',
       'group_added',
-      'group_removed',
-      'group_left_self',
-      'group_dissolved',
       'group_request_added',
       'group_member_added',
       'group_member_removed',
@@ -47,31 +46,51 @@ export const useConversationSocket = (
       'message_seen',
     ];
 
-    const handleEvent = (payload?: any) => {
+    const handleNormal = (payload?: any) => {
       onUpdateRef.current();
-      const conversationId =
+      const cid =
         payload?.conversationId ||
         payload?.conversation?._id ||
-        payload?.payload?.message?.conversationId ||
         payload?.payload?.conversationId;
-      if (conversationId) {
-        joinConversation(conversationId);
-      }
+      if (cid) joinConversation(cid);
+    };
+
+    // Events khiến user mất quyền truy cập conversation — cần navigate ra
+    const handleGroupRemoved = (payload?: any) => {
+      onUpdateRef.current();
+      const cid = payload?.conversationId;
+      if (cid) onForceLeaveRef.current?.(cid, 'removed');
+    };
+
+    const handleGroupLeft = (payload?: any) => {
+      onUpdateRef.current();
+      const cid = payload?.conversationId;
+      if (cid) onForceLeaveRef.current?.(cid, 'left');
+    };
+
+    const handleGroupDissolved = (payload?: any) => {
+      onUpdateRef.current();
+      const cid = payload?.conversationId;
+      if (cid) onForceLeaveRef.current?.(cid, 'dissolved');
     };
 
     const handleJoinRequested = (payload?: any) => {
-      console.log('[Socket] group_join_requested received:', payload);
-      handleEvent(payload);
+      handleNormal(payload);
       onJoinRequestedRef.current?.(payload);
     };
 
-    generalEvents.forEach(event => socket.on(event, handleEvent));
+    normalEvents.forEach(e => socket.on(e, handleNormal));
+    socket.on('group_removed', handleGroupRemoved);
+    socket.on('group_left_self', handleGroupLeft);
+    socket.on('group_dissolved', handleGroupDissolved);
     socket.on('group_join_requested', handleJoinRequested);
 
     return () => {
-      generalEvents.forEach(event => socket.off(event, handleEvent));
+      normalEvents.forEach(e => socket.off(e, handleNormal));
+      socket.off('group_removed', handleGroupRemoved);
+      socket.off('group_left_self', handleGroupLeft);
+      socket.off('group_dissolved', handleGroupDissolved);
       socket.off('group_join_requested', handleJoinRequested);
     };
-  // Chỉ depend vào socket — không depend vào callbacks (dùng ref thay thế)
   }, [socket, joinConversation]);
 };

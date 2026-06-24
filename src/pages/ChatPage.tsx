@@ -132,8 +132,20 @@ const ChatPage: React.FC = () => {
                 ...prev,
                 [cid]: (prev[cid] || 0) + 1,
             }));
-            // Trigger reload pending list trong ConversationPanel nếu đang mở
             setReloadPendingTrigger(prev => prev + 1);
+        },
+        onForceLeave: (cid, reason) => {
+            // Nếu đang mở đúng conversation bị xóa/rời/giải tán → navigate ra
+            if (activeChat === cid || window.location.pathname.includes(cid)) {
+                if (reason === 'dissolved') {
+                    toast.error("Nhóm đã bị giải tán");
+                } else if (reason === 'removed') {
+                    toast.error("Bạn đã bị xóa khỏi nhóm");
+                } else {
+                    toast.success("Đã rời nhóm");
+                }
+                navigate("/chat");
+            }
         },
     });
 
