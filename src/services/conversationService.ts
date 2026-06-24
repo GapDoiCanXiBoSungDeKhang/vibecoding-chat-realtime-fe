@@ -79,7 +79,7 @@ export const conversationService = {
     return response.data;
   },
 
-  async handleJoinRequest(roomId: string, requestId: string, action: 'accepted' | 'rejected'): Promise<any> {
+  async handleJoinRequest(roomId: string, requestId: string, action: 'accept' | 'reject'): Promise<any> {
     const response = await api.patch(`/conversations/${roomId}/request/handle`, { id: requestId, action });
     return response.data;
   },

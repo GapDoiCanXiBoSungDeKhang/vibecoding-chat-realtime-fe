@@ -1,13 +1,37 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 
-export const useConversationSocket = (onUpdate: () => void) => {
+interface UseConversationSocketOptions {
+  onUpdate: () => void;
+  onJoinRequested?: (payload: any) => void;
+}
+
+export const useConversationSocket = (
+  onUpdateOrOptions: (() => void) | UseConversationSocketOptions
+) => {
   const { socket, joinConversation } = useSocket();
+
+  // Dùng ref để tránh stale closure — callback luôn là phiên bản mới nhất
+  // mà không cần re-register socket listener mỗi lần render
+  const onUpdateRef = useRef<() => void>(() => {});
+  const onJoinRequestedRef = useRef<((payload: any) => void) | undefined>(undefined);
+
+  useEffect(() => {
+    onUpdateRef.current =
+      typeof onUpdateOrOptions === 'function'
+        ? onUpdateOrOptions
+        : onUpdateOrOptions.onUpdate;
+
+    onJoinRequestedRef.current =
+      typeof onUpdateOrOptions === 'object'
+        ? onUpdateOrOptions.onJoinRequested
+        : undefined;
+  });
 
   useEffect(() => {
     if (!socket) return;
 
-    const events = [
+    const generalEvents = [
       'group_created',
       'group_added',
       'group_removed',
@@ -20,30 +44,34 @@ export const useConversationSocket = (onUpdate: () => void) => {
       'group_role_changed',
       'group_request_handled',
       'conversation_updated',
-      'message_seen'
+      'message_seen',
     ];
 
     const handleEvent = (payload?: any) => {
-      onUpdate();
-      // If a new conversation is detected, ensure we join its room for global notifications
-      const conversationId = 
-        payload?.conversationId || 
-        payload?.conversation?._id || 
-        payload?.payload?.message?.conversationId || 
+      onUpdateRef.current();
+      const conversationId =
+        payload?.conversationId ||
+        payload?.conversation?._id ||
+        payload?.payload?.message?.conversationId ||
         payload?.payload?.conversationId;
       if (conversationId) {
         joinConversation(conversationId);
       }
     };
 
-    events.forEach(event => {
-      socket.on(event, handleEvent);
-    });
+    const handleJoinRequested = (payload?: any) => {
+      console.log('[Socket] group_join_requested received:', payload);
+      handleEvent(payload);
+      onJoinRequestedRef.current?.(payload);
+    };
+
+    generalEvents.forEach(event => socket.on(event, handleEvent));
+    socket.on('group_join_requested', handleJoinRequested);
 
     return () => {
-      events.forEach(event => {
-        socket.off(event, handleEvent);
-      });
+      generalEvents.forEach(event => socket.off(event, handleEvent));
+      socket.off('group_join_requested', handleJoinRequested);
     };
-  }, [socket, onUpdate, joinConversation]);
+  // Chỉ depend vào socket — không depend vào callbacks (dùng ref thay thế)
+  }, [socket, joinConversation]);
 };

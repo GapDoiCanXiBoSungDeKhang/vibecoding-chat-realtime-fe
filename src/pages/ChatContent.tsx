@@ -11,6 +11,9 @@ const ChatContent: React.FC = () => {
         setIsPanelOpen,
         currentUserId,
         fetchConversations,
+        pendingGroupRequests = {},
+        reloadPendingTrigger = 0,
+        clearPendingGroupRequests,
     } = useOutletContext<any>();
     const navigate = useNavigate();
 
@@ -40,6 +43,9 @@ const ChatContent: React.FC = () => {
                         fetchConversations();
                     }}
                     onRefresh={fetchConversations}
+                    pendingMemberRequests={pendingGroupRequests[activeChat] || 0}
+                    reloadPendingTrigger={reloadPendingTrigger}
+                    onMembersTabOpen={() => clearPendingGroupRequests?.(activeChat)}
                 />
             )}
         </div>

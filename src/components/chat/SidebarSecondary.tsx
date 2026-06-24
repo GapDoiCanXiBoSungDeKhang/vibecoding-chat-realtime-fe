@@ -32,6 +32,7 @@ interface SidebarSecondaryProps {
     onOpenInfo?: (conv: any) => void;
     onRefresh?: () => void;
     unreadMentions?: Set<string>;
+    pendingGroupRequests?: Record<string, number>;
 }
 
 const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
@@ -46,6 +47,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
     onOpenInfo,
     onRefresh,
     unreadMentions = new Set(),
+    pendingGroupRequests = {},
 }) => {
     const navigate = useNavigate();
     const [contextMenu, setContextMenu] = useState<{
@@ -257,6 +259,14 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                                             title="Bạn được nhắc tên"
                                                         >
                                                             @
+                                                        </div>
+                                                    )}
+                                                    {(pendingGroupRequests[conv._id] || 0) > 0 && (
+                                                        <div
+                                                            className="min-w-[16px] h-4 px-0.5 bg-orange-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center shadow-sm"
+                                                            title="Có thành viên chờ duyệt"
+                                                        >
+                                                            {pendingGroupRequests[conv._id] > 9 ? "9+" : pendingGroupRequests[conv._id]}
                                                         </div>
                                                     )}
                                                 </div>

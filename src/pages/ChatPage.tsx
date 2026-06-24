@@ -33,6 +33,10 @@ const ChatPage: React.FC = () => {
     const [prevActiveChat, setPrevActiveChat] = useState<string | null>(null);
     const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
     const [pendingFriendCount, setPendingFriendCount] = useState(0);
+    // Map conversationId -> số pending join requests chưa xem
+    const [pendingGroupRequests, setPendingGroupRequests] = useState<Record<string, number>>({});
+    // Trigger reload ConversationPanel pending list khi socket fire
+    const [reloadPendingTrigger, setReloadPendingTrigger] = useState(0);
 
     useGlobalNotifications(
         activeChat,
@@ -55,7 +59,37 @@ const ChatPage: React.FC = () => {
     useEffect(() => {
         friendService.getFriendRequests()
             .then((data) => setPendingFriendCount(data?.length ?? 0))
-            .catch(() => { });
+            .catch(() => {});
+    }, []);
+
+    // Restore pending group request badges sau khi refresh
+    // Fetch pending count cho tất cả group conversations
+    useEffect(() => {
+        const restorePendingGroupBadges = async () => {
+            try {
+                const convs = await conversationService.getConversations();
+                const groups = (convs || []).filter((c: any) => c.type === "group");
+                const counts: Record<string, number> = {};
+                await Promise.all(
+                    groups.map(async (g: any) => {
+                        try {
+                            const requests = await conversationService.listJoinRequests(g._id);
+                            if (requests?.length > 0) {
+                                counts[g._id] = requests.length;
+                            }
+                        } catch {
+                            // Bỏ qua nếu lỗi (không đủ quyền hoặc network)
+                        }
+                    })
+                );
+                if (Object.keys(counts).length > 0) {
+                    setPendingGroupRequests(counts);
+                }
+            } catch {
+                // Bỏ qua
+            }
+        };
+        restorePendingGroupBadges();
     }, []);
 
     // Reset badge khi user vào tab contacts
@@ -89,7 +123,19 @@ const ChatPage: React.FC = () => {
         }
     }, [isConnected, conversations, joinConversation]);
 
-    useConversationSocket(fetchConversations);
+    useConversationSocket({
+        onUpdate: fetchConversations,
+        onJoinRequested: (payload) => {
+            const cid = payload?.conversationId;
+            if (!cid) return;
+            setPendingGroupRequests(prev => ({
+                ...prev,
+                [cid]: (prev[cid] || 0) + 1,
+            }));
+            // Trigger reload pending list trong ConversationPanel nếu đang mở
+            setReloadPendingTrigger(prev => prev + 1);
+        },
+    });
 
     useFriendSocket({
         onUpdate: fetchConversations,
@@ -173,9 +219,16 @@ const ChatPage: React.FC = () => {
                             next.delete(id);
                             return next;
                         });
+                        // Reset pending group request badge khi mở conversation đó
+                        setPendingGroupRequests(prev => {
+                            const next = { ...prev };
+                            delete next[id];
+                            return next;
+                        });
                     }}
                     activeChatId={activeChat}
                     unreadMentions={unreadMentions}
+                    pendingGroupRequests={pendingGroupRequests}
                     onCreateGroup={() => setIsCreateGroupOpen(true)}
                     onCreatePrivate={() => setIsCreatePrivateOpen(true)}
                     currentUserId={user?.sub || ""}
@@ -216,6 +269,14 @@ const ChatPage: React.FC = () => {
                     fetchConversations,
                     handleStartChat,
                     handleOpenInfo,
+                    pendingGroupRequests,
+                    reloadPendingTrigger,
+                    clearPendingGroupRequests: (cid: string) =>
+                        setPendingGroupRequests(prev => {
+                            const next = { ...prev };
+                            delete next[cid];
+                            return next;
+                        }),
                 }}
             />
         </ChatLayout>

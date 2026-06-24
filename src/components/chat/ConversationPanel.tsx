@@ -17,6 +17,7 @@ import {
     LogOut,
     Trash2,
     UserPlus,
+    Clock,
 } from "lucide-react";
 import { conversationService } from "../../services/conversationService";
 import Avatar from "../ui/Avatar";
@@ -39,6 +40,9 @@ interface ConversationPanelProps {
     onClose: () => void;
     onConversationAction?: () => void;
     onRefresh?: () => void;
+    pendingMemberRequests?: number;
+    reloadPendingTrigger?: number;
+    onMembersTabOpen?: () => void;
 }
 
 const ConversationPanel: React.FC<ConversationPanelProps> = ({
@@ -48,6 +52,9 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     onClose,
     onConversationAction,
     onRefresh,
+    pendingMemberRequests = 0,
+    reloadPendingTrigger = 0,
+    onMembersTabOpen,
 }) => {
     const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
     const [tab, setTab] = useState<Tab>("info");
@@ -59,6 +66,8 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     const [newAnnouncement, setNewAnnouncement] = useState("");
     const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+    const [isPendingLoading, setIsPendingLoading] = useState(false);
 
     // Backend returns { year: { month: [items] } } — flatten it to a plain array
     const flattenHashTable = (data: any): any[] => {
@@ -100,7 +109,15 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
         else if (tab === "link") loadLinks();
         else if (tab === "pins") loadPins();
         else if (tab === "announcements") loadAnnouncements();
+        else if (tab === "members") loadPendingRequests();
     }, [tab, conversationId]);
+
+    // Khi socket fire group_join_requested → reload pending list ngay (kể cả khi panel đang mở)
+    useEffect(() => {
+        if (reloadPendingTrigger > 0 && isGroup) {
+            loadPendingRequests();
+        }
+    }, [reloadPendingTrigger]);
 
     const loadMedia = async () => {
         setIsLoading(true);
@@ -161,6 +178,18 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
             toast.error("Không thể tải bản tin");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadPendingRequests = async () => {
+        setIsPendingLoading(true);
+        try {
+            const data = await conversationService.listJoinRequests(conversationId);
+            setPendingRequests(data || []);
+        } catch {
+            // Không toast — member bình thường gọi API này có thể bị lỗi auth cũ
+        } finally {
+            setIsPendingLoading(false);
         }
     };
 
@@ -250,7 +279,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
         }
     };
 
-    const TABS: { key: Tab; icon: React.ReactNode; label: string }[] = [
+    const TABS: { key: Tab; icon: React.ReactNode; label: string; badge?: number }[] = [
         { key: "info", icon: <User size={14} />, label: "Thông tin" },
         { key: "media", icon: <ImageIcon size={14} />, label: "Ảnh/Video" },
         { key: "file", icon: <File size={14} />, label: "File" },
@@ -261,6 +290,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                       key: "members" as Tab,
                       icon: <Users size={14} />,
                       label: "Thành viên",
+                      badge: pendingMemberRequests,
                   },
               ]
             : []),
@@ -328,10 +358,18 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                 {TABS.map((t) => (
                     <button
                         key={t.key}
-                        onClick={() => setTab(t.key)}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${tab === t.key ? "bg-blue-500 text-white shadow-sm" : "text-gray-500 hover:bg-gray-200"}`}
+                        onClick={() => {
+                            setTab(t.key);
+                            if (t.key === "members") onMembersTabOpen?.();
+                        }}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all relative ${tab === t.key ? "bg-blue-500 text-white shadow-sm" : "text-gray-500 hover:bg-gray-200"}`}
                     >
                         {t.icon} {t.label}
+                        {"badge" in t && (t as any).badge > 0 && (
+                            <span className="ml-0.5 min-w-[14px] h-3.5 px-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                                {(t as any).badge > 9 ? "9+" : (t as any).badge}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -647,6 +685,73 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                             </div>
                                         );
                                     },
+                                )}
+                                {/* Pending requests section */}
+                                {isPendingLoading ? (
+                                    <div className="flex justify-center py-4">
+                                        <Loader2 className="animate-spin text-orange-400" size={16} />
+                                    </div>
+                                ) : pendingRequests.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-orange-100">
+                                        <div className="flex items-center gap-1.5 px-1 mb-2">
+                                            <Clock size={12} className="text-orange-400" />
+                                            <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wide">
+                                                Chờ duyệt ({pendingRequests.length})
+                                            </span>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {pendingRequests.map((req: any) => (
+                                                <div
+                                                    key={req._id}
+                                                    className="flex items-center gap-2.5 p-2.5 bg-orange-50 border border-orange-100 rounded-xl"
+                                                >
+                                                    <Avatar name={req.userId?.name} size="sm" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-sm font-semibold text-gray-800 truncate">
+                                                                {req.userId?.name}
+                                                            </span>
+                                                            <span className="text-[9px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
+                                                                Chờ duyệt
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[11px] text-gray-400 truncate">
+                                                            Đề xuất bởi: <span className="text-orange-500 font-medium">{req.actor?.name}</span>
+                                                        </div>
+                                                    </div>
+                                                    {isAdmin && (
+                                                        <div className="flex gap-1">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await conversationService.handleJoinRequest(conversationId, req._id, "accept");
+                                                                        toast.success(`Đã chấp nhận ${req.userId?.name}`);
+                                                                        loadPendingRequests();
+                                                                        onRefresh?.();
+                                                                    } catch { toast.error("Thao tác thất bại"); }
+                                                                }}
+                                                                className="px-2 py-1 text-[10px] font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                                                            >
+                                                                Duyệt
+                                                            </button>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await conversationService.handleJoinRequest(conversationId, req._id, "reject");
+                                                                        toast.success("Đã từ chối");
+                                                                        loadPendingRequests();
+                                                                    } catch { toast.error("Thao tác thất bại"); }
+                                                                }}
+                                                                className="px-2 py-1 text-[10px] font-bold bg-gray-200 hover:bg-red-100 hover:text-red-600 text-gray-600 rounded-lg transition-colors"
+                                                            >
+                                                                Từ chối
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         )}
