@@ -5,6 +5,9 @@ import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import SettingsModal from "../components/chat/SettingsModal";
 import SidebarPrimary from "../components/chat/SidebarPrimary";
+import CallModal from "../components/chat/CallModal";
+import { useCallSocket } from "../hooks/useCallSocket";
+import type { CallType } from "../hooks/useCallSocket";
 import SidebarSecondary from "../components/chat/SidebarSecondary";
 import CreateGroupModal from "../components/chat/CreateGroupModal";
 import CreatePrivateChatModal from "../components/chat/CreatePrivateChatModal";
@@ -33,6 +36,17 @@ const ChatPage: React.FC = () => {
     const [prevActiveChat, setPrevActiveChat] = useState<string | null>(null);
     const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
     const [pendingFriendCount, setPendingFriendCount] = useState(0);
+    // Call state
+    const [callModal, setCallModal] = useState<{
+        outgoing?: {
+            calleId: string;
+            calleeName: string;
+            calleeAvatar?: string | null;
+            conversationId: string;
+            callType: CallType;
+        };
+    } | null>(null);
+
     // Map conversationId -> số pending join requests chưa xem
     const [pendingGroupRequests, setPendingGroupRequests] = useState<Record<string, number>>({});
     // Trigger reload ConversationPanel pending list khi socket fire
@@ -122,6 +136,24 @@ const ChatPage: React.FC = () => {
             });
         }
     }, [isConnected, conversations, joinConversation]);
+
+    // Lắng nghe incoming call toàn cục
+    useCallSocket({
+        onIncoming: (_payload) => {
+            // Chỉ mở modal nếu chưa đang trong cuộc gọi nào
+            if (callModal === null) {
+                setCallModal({}); // mở modal không có outgoing → incoming mode
+            }
+        },
+        onAccepted: () => {},
+        onRejected: () => {},
+        onEnded: () => {},
+        onCancelled: () => {},
+        onBusy: () => {},
+        onOffer: () => {},
+        onAnswer: () => {},
+        onIceCandidate: () => {},
+    });
 
     useConversationSocket({
         onUpdate: fetchConversations,
@@ -217,6 +249,7 @@ const ChatPage: React.FC = () => {
     };
 
     return (
+        <>
         <ChatLayout
             primarySidebar={
                 <SidebarPrimary
@@ -295,6 +328,9 @@ const ChatPage: React.FC = () => {
                     handleOpenInfo,
                     pendingGroupRequests,
                     reloadPendingTrigger,
+                    startCall: (params: { calleId: string; calleeName: string; calleeAvatar?: string | null; conversationId: string; callType: 'voice' | 'video' }) => {
+                        setCallModal({ outgoing: params });
+                    },
                     clearPendingGroupRequests: (cid: string) =>
                         setPendingGroupRequests(prev => {
                             const next = { ...prev };
@@ -304,6 +340,15 @@ const ChatPage: React.FC = () => {
                 }}
             />
         </ChatLayout>
+
+        {/* Call Modal — mount ở root để nhận incoming call từ bất kỳ màn hình nào */}
+        {callModal !== null && (
+            <CallModal
+                outgoing={callModal.outgoing}
+                onClose={() => setCallModal(null)}
+            />
+        )}
+        </>
     );
 };
 
