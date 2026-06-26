@@ -36,6 +36,7 @@ interface ChatAreaProps {
     activeChat: string | null;
     onClose?: () => void;
     onOpenInfo?: () => void;
+    onStartCall?: (callType: 'voice' | 'video') => void;
 }
 
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"];
@@ -83,6 +84,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     activeChat,
     onClose,
     onOpenInfo,
+    onStartCall,
 }) => {
     const { user } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -834,18 +836,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     >
                         <Search size={18} />
                     </button>
-                    <button
-                        className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                        title="Gọi thoại"
-                    >
-                        <Phone size={18} />
-                    </button>
-                    <button
-                        className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                        title="Gọi video"
-                    >
-                        <Video size={18} />
-                    </button>
+                    {/* Chỉ hiện nút call cho private chat */}
+                    {isPrivate && (
+                        <>
+                            <button
+                                onClick={() => onStartCall?.('voice')}
+                                className="p-2 text-gray-500 hover:bg-green-100 hover:text-green-600 rounded-full transition-colors"
+                                title="Gọi thoại"
+                            >
+                                <Phone size={18} />
+                            </button>
+                            <button
+                                onClick={() => onStartCall?.('video')}
+                                className="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors"
+                                title="Gọi video"
+                            >
+                                <Video size={18} />
+                            </button>
+                        </>
+                    )}
                     <div className="w-px h-5 bg-gray-200 mx-1" />
                     <button
                         onClick={onOpenInfo}

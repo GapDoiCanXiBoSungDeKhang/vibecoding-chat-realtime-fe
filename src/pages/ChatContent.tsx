@@ -13,9 +13,30 @@ const ChatContent: React.FC = () => {
         fetchConversations,
         pendingGroupRequests = {},
         reloadPendingTrigger = 0,
+        startCall,
         clearPendingGroupRequests,
     } = useOutletContext<any>();
     const navigate = useNavigate();
+
+    // Derive callee info từ activeChatInfo (chỉ dùng cho private chat)
+    const handleStartCall = (callType: 'voice' | 'video') => {
+        if (!activeChatInfo || !activeChat || !startCall) return;
+        const isPrivate = activeChatInfo.type === 'private';
+        if (!isPrivate) return;
+
+        const otherParticipant = activeChatInfo.participants?.find(
+            (p: any) => p.userId?._id !== currentUserId
+        );
+        if (!otherParticipant) return;
+
+        startCall({
+            calleId: otherParticipant.userId._id,
+            calleeName: otherParticipant.userId.name,
+            calleeAvatar: otherParticipant.userId.avatar ?? null,
+            conversationId: activeChat,
+            callType,
+        });
+    };
 
     return (
         <div className="flex-1 flex h-full overflow-hidden">
@@ -29,6 +50,7 @@ const ChatContent: React.FC = () => {
                     onOpenInfo={() => {
                         if (activeChatInfo) setIsPanelOpen((p: boolean) => !p);
                     }}
+                    onStartCall={handleStartCall}
                 />
             </div>
             {isPanelOpen && activeChatInfo && activeChat && (
