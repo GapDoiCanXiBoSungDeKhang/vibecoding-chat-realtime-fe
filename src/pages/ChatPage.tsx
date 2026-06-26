@@ -45,6 +45,14 @@ const ChatPage: React.FC = () => {
             conversationId: string;
             callType: CallType;
         };
+        incoming?: {
+            callId: string;
+            callerId: string;
+            callerName: string;
+            callerAvatar?: string | null;
+            callType: CallType;
+            conversationId: string;
+        };
     } | null>(null);
 
     // Map conversationId -> số pending join requests chưa xem
@@ -137,18 +145,27 @@ const ChatPage: React.FC = () => {
         }
     }, [isConnected, conversations, joinConversation]);
 
-    // Lắng nghe incoming call toàn cục
+    // Lắng nghe incoming call toàn cục — chỉ mở modal khi chưa có call
     useCallSocket({
-        onIncoming: (_payload) => {
-            // Chỉ mở modal nếu chưa đang trong cuộc gọi nào
+        onIncoming: (payload) => {
             if (callModal === null) {
-                setCallModal({}); // mở modal không có outgoing → incoming mode
+                setCallModal({
+                    incoming: {
+                        callId: payload.callId,
+                        callerId: payload.callerId ?? '',
+                        callerName: payload.callerInfo?.name ?? 'Người dùng',
+                        callerAvatar: payload.callerInfo?.avatar ?? null,
+                        callType: payload.callType,
+                        conversationId: payload.conversationId ?? '',
+                    },
+                });
             }
         },
+        onStarted: () => {},
         onAccepted: () => {},
         onRejected: () => {},
-        onEnded: () => {},
-        onCancelled: () => {},
+        onEnded: () => { setCallModal(null); },
+        onCancelled: () => { setCallModal(null); },
         onBusy: () => {},
         onOffer: () => {},
         onAnswer: () => {},
@@ -345,6 +362,7 @@ const ChatPage: React.FC = () => {
         {callModal !== null && (
             <CallModal
                 outgoing={callModal.outgoing}
+                incoming={callModal.incoming}
                 onClose={() => setCallModal(null)}
             />
         )}
