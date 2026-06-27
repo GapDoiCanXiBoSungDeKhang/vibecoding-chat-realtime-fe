@@ -35,8 +35,10 @@ type Phase = 'calling' | 'incoming' | 'connecting' | 'connected' | 'ended';
 class RTCManager {
   private pc: RTCPeerConnection | null = null;
   private stream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
   private pendingCandidates: RTCIceCandidateInit[] = [];
   private remoteDescSet = false;
+  private onTrackCb: ((s: MediaStream) => void) | null = null;
 
   private iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -65,8 +67,12 @@ class RTCManager {
 
     this.stream?.getTracks().forEach(t => this.pc!.addTrack(t, this.stream!));
 
+    this.onTrackCb = onTrack;
     this.pc.ontrack = (e) => {
-      if (e.streams?.[0]) onTrack(e.streams[0]);
+      if (e.streams?.[0]) {
+        this.remoteStream = e.streams[0];
+        this.onTrackCb?.(e.streams[0]);
+      }
     };
 
     this.pc.onicecandidate = (e) => {
@@ -115,7 +121,14 @@ class RTCManager {
     return answer;
   }
 
-  getStream_(): MediaStream | null { return this.stream; }
+  getLocalStream(): MediaStream | null { return this.stream; }
+  getRemoteStream(): MediaStream | null { return this.remoteStream; }
+  // Retry attach remote stream nếu ref chưa sẵn lúc onTrack chạy
+  retryRemoteStream(): void {
+    if (this.remoteStream && this.onTrackCb) {
+      this.onTrackCb(this.remoteStream);
+    }
+  }
 
   toggleAudio(muted: boolean) {
     this.stream?.getAudioTracks().forEach(t => { t.enabled = !muted; });
@@ -128,6 +141,8 @@ class RTCManager {
   destroy() {
     this.stream?.getTracks().forEach(t => t.stop());
     this.stream = null;
+    this.remoteStream = null;
+    this.onTrackCb = null;
     this.pc?.close();
     this.pc = null;
     this.pendingCandidates = [];
@@ -146,6 +161,7 @@ const CallModal: React.FC<CallModalProps> = ({ outgoing, incoming, onClose }) =>
 
   const localVideoRef  = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null); // audio riêng cho voice call
   const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Dùng ref để giữ state không bị stale trong socket callbacks
@@ -159,6 +175,32 @@ const CallModal: React.FC<CallModalProps> = ({ outgoing, incoming, onClose }) =>
   const startTimer = () => {
     timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
   };
+
+  // Khi phase chuyển sang connected: attach stream vào elements
+  // Audio tự play qua remoteVideoRef (autoPlay), video call cần set srcObject
+  useEffect(() => {
+    if (phase !== 'connected') return;
+    // Small delay để đảm bảo video elements đã mount
+    const t = setTimeout(() => {
+      const rs = rtc.current.getRemoteStream();
+      const ls = rtc.current.getLocalStream();
+      if (rs) {
+        // Video call: dùng video element
+        if (callType === 'video' && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = rs;
+        }
+        // Voice call & video call: audio element riêng để đảm bảo audio play
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = rs;
+          remoteAudioRef.current.play().catch(() => {});
+        }
+      }
+      if (ls && callType === 'video' && localVideoRef.current) {
+        localVideoRef.current.srcObject = ls;
+      }
+    }, 150);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -191,15 +233,28 @@ const CallModal: React.FC<CallModalProps> = ({ outgoing, incoming, onClose }) =>
 
       rtc.current.createPeer(
         (c) => sendIceCandidate(cid, remoteUserRef.current, c),
-        (s) => { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = s; },
+        (s) => {
+          // Dùng ref trực tiếp, nếu chưa mount thì rtc lưu lại để retry
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = s;
+        },
         (state) => {
-          if (state === 'connected') { setPhaseSync('connected'); startTimer(); }
+          if (state === 'connected') {
+            setPhaseSync('connected');
+            startTimer();
+            // Retry attach stream sau khi video element render
+            setTimeout(() => {
+              rtc.current.retryRemoteStream();
+            }, 100);
+          }
           if (state === 'failed' || state === 'disconnected') {
             toast.error('Kết nối bị ngắt');
             cleanup(); setPhaseSync('ended'); setTimeout(onClose, 1500);
           }
         },
       );
+
+      const ls = rtc.current.getLocalStream();
+      if (ls && localVideoRef.current) localVideoRef.current.srcObject = ls;
 
       const offer = await rtc.current.createOffer();
       if (offer) sendOffer(cid, remoteUserRef.current, offer);
@@ -236,15 +291,26 @@ const CallModal: React.FC<CallModalProps> = ({ outgoing, incoming, onClose }) =>
 
       rtc.current.createPeer(
         (c) => sendIceCandidate(cid, fromUserId, c),
-        (s) => { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = s; },
+        (s) => {
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = s;
+        },
         (state) => {
-          if (state === 'connected') { setPhaseSync('connected'); startTimer(); }
+          if (state === 'connected') {
+            setPhaseSync('connected');
+            startTimer();
+            setTimeout(() => {
+              rtc.current.retryRemoteStream();
+            }, 100);
+          }
           if (state === 'failed' || state === 'disconnected') {
             toast.error('Kết nối bị ngắt');
             cleanup(); setPhaseSync('ended'); setTimeout(onClose, 1500);
           }
         },
       );
+
+      const ls2 = rtc.current.getLocalStream();
+      if (ls2 && localVideoRef.current) localVideoRef.current.srcObject = ls2;
 
       await rtc.current.setRemoteDesc(sdp);
       const answer = await rtc.current.createAnswer();
@@ -321,6 +387,8 @@ const CallModal: React.FC<CallModalProps> = ({ outgoing, incoming, onClose }) =>
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Hidden audio element — đảm bảo remote audio luôn play */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       <div className="relative w-full max-w-sm mx-4 rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-b from-gray-900 to-gray-800 text-white">
