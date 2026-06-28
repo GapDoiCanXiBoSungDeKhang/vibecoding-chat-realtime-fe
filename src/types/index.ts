@@ -63,10 +63,11 @@ export interface Message {
   updatedAt: string;
   callInfo?: {
     callType: 'voice' | 'video';
-    status: 'missed' | 'ended' | 'declined' | 'started';
+    status: 'missed' | 'ended' | 'cancelled';
     duration?: number;
     startedAt?: string;
     endedAt?: string;
+    participants?: User[];
   };
 }
 

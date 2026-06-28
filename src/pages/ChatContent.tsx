@@ -51,6 +51,7 @@ const ChatContent: React.FC = () => {
                         if (activeChatInfo) setIsPanelOpen((p: boolean) => !p);
                     }}
                     onStartCall={handleStartCall}
+                    isPrivateChat={activeChatInfo?.type === 'private'}
                 />
             </div>
             {isPanelOpen && activeChatInfo && activeChat && (

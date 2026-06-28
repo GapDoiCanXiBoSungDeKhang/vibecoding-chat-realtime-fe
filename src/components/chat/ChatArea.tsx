@@ -23,6 +23,9 @@ import {
     ExternalLink,
     ChevronLeft,
     ChevronRight,
+    PhoneOff,
+    PhoneMissed,
+
 } from "lucide-react";
 import { messageService } from "../../services/messageService";
 import { conversationService } from "../../services/conversationService";
@@ -37,6 +40,7 @@ interface ChatAreaProps {
     onClose?: () => void;
     onOpenInfo?: () => void;
     onStartCall?: (callType: 'voice' | 'video') => void;
+    isPrivateChat?: boolean;
 }
 
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"];
@@ -55,6 +59,90 @@ const formatFileSize = (bytes: number) => {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
+
+const formatCallDuration = (seconds: number): string => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+};
+
+const renderCallMessage = (
+    msg: any,
+    isMine: boolean,
+    onStartCall?: (type: 'voice' | 'video') => void,
+) => {
+    const status = msg.callInfo?.status as 'ended' | 'missed' | 'cancelled' | undefined;
+    const callType = msg.callInfo?.callType as 'voice' | 'video' | undefined;
+    const duration = msg.callInfo?.duration as number | undefined;
+
+    const isVideo = callType === 'video';
+    const isMissed = status === 'missed';
+    const isCancelled = status === 'cancelled';
+    const isEnded = status === 'ended';
+
+    const Icon = isMissed
+        ? PhoneMissed
+        : isCancelled
+        ? PhoneOff
+        : isVideo
+        ? Video
+        : Phone;
+
+    const statusText = {
+        ended: isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
+        missed: isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ',
+        cancelled: isVideo ? 'Cuộc gọi video đã huỷ' : 'Cuộc gọi thoại đã huỷ',
+    }[status ?? 'ended'] ?? msg.content;
+
+    const iconBg = isMine
+        ? isMissed || isCancelled ? 'bg-red-400/20' : 'bg-white/15'
+        : isMissed || isCancelled ? 'bg-red-50' : 'bg-green-50';
+
+    const iconColor = isMine
+        ? isMissed || isCancelled ? 'text-red-200' : 'text-white'
+        : isMissed || isCancelled ? 'text-red-500' : 'text-green-600';
+
+    return (
+        <div className="flex flex-col gap-2 py-0.5 min-w-[180px]">
+            {/* Icon + text */}
+            <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-full ${iconBg} flex-shrink-0`}>
+                    <Icon size={15} className={iconColor} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold leading-tight">{statusText}</span>
+                    {isEnded && duration != null && duration > 0 ? (
+                        <span className="text-xs opacity-60 leading-tight mt-0.5">
+                            {formatCallDuration(duration)}
+                        </span>
+                    ) : isMissed ? (
+                        <span className={`text-xs leading-tight mt-0.5 ${isMine ? 'text-red-200' : 'text-red-400'}`}>
+                            Không có người nghe máy
+                        </span>
+                    ) : isCancelled ? (
+                        <span className="text-xs opacity-50 leading-tight mt-0.5">
+                            Cuộc gọi đã bị huỷ
+                        </span>
+                    ) : null}
+                </div>
+            </div>
+            {/* Nút gọi lại — chỉ hiện khi là private chat và có onStartCall */}
+            {onStartCall && (
+                <button
+                    onClick={() => onStartCall(callType ?? 'voice')}
+                    className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5
+                        ${isMine
+                            ? 'bg-white/15 hover:bg-white/25 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        }`}
+                >
+                    {isVideo ? <Video size={12} /> : <Phone size={12} />}
+                    Gọi lại
+                </button>
+            )}
+        </div>
+    );
 };
 
 const renderMessageContent = (content: string, isMine: boolean) => {
@@ -85,6 +173,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     onClose,
     onOpenInfo,
     onStartCall,
+    isPrivateChat = false,
 }) => {
     const { user } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -1367,32 +1456,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                                 </div>
                                             ) : msg.type === "call" &&
                                               !msg.isDeleted ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Phone
-                                                        size={13}
-                                                        className={
-                                                            isMine
-                                                                ? "text-white/70"
-                                                                : "text-gray-400"
-                                                        }
-                                                    />
-                                                    <span>{msg.content}</span>
-                                                    {msg.callInfo?.duration && (
-                                                        <span className="text-xs opacity-70">
-                                                            {Math.round(
-                                                                msg.callInfo
-                                                                    .duration /
-                                                                    60,
-                                                            )}
-                                                            :
-                                                            {String(
-                                                                msg.callInfo
-                                                                    .duration %
-                                                                    60,
-                                                            ).padStart(2, "0")}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                renderCallMessage(
+                                                    msg,
+                                                    isMine,
+                                                    // Chỉ hiện "Gọi lại" ở private chat
+                                                    isPrivateChat ? onStartCall : undefined,
+                                                )
                                             ) : (
                                                 <div className="flex flex-col gap-2">
                                                     <span className="break-words">
