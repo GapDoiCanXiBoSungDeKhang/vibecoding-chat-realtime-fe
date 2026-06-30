@@ -14,6 +14,7 @@ const ChatContent: React.FC = () => {
         pendingGroupRequests = {},
         reloadPendingTrigger = 0,
         startCall,
+        startGroupCall,
         clearPendingGroupRequests,
     } = useOutletContext<any>();
     const navigate = useNavigate();
@@ -38,6 +39,15 @@ const ChatContent: React.FC = () => {
         });
     };
 
+    const handleStartGroupCall = (callType: 'voice' | 'video') => {
+        if (!activeChatInfo || !activeChat || !startGroupCall) return;
+        startGroupCall({
+            conversationId: activeChat,
+            conversationName: activeChatInfo.name ?? 'Cuộc gọi nhóm',
+            callType,
+        });
+    };
+
     return (
         <div className="flex-1 flex h-full overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0">
@@ -51,7 +61,9 @@ const ChatContent: React.FC = () => {
                         if (activeChatInfo) setIsPanelOpen((p: boolean) => !p);
                     }}
                     onStartCall={handleStartCall}
+                    onStartGroupCall={handleStartGroupCall}
                     isPrivateChat={activeChatInfo?.type === 'private'}
+                    isGroupChat={activeChatInfo?.type === 'group'}
                 />
             </div>
             {isPanelOpen && activeChatInfo && activeChat && (

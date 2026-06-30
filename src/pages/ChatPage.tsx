@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import SettingsModal from "../components/chat/SettingsModal";
 import SidebarPrimary from "../components/chat/SidebarPrimary";
 import CallModal from "../components/chat/CallModal";
+import GroupCallModal from "../components/chat/GroupCallModal";
+import { useGroupCallSocket } from "../hooks/useGroupCallSocket";
 import { useCallSocket } from "../hooks/useCallSocket";
 import type { CallType } from "../hooks/useCallSocket";
 import SidebarSecondary from "../components/chat/SidebarSecondary";
@@ -37,6 +39,14 @@ const ChatPage: React.FC = () => {
     const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
     const [pendingFriendCount, setPendingFriendCount] = useState(0);
     // Call state
+    const [groupCallModal, setGroupCallModal] = useState<{
+        conversationId: string;
+        conversationName: string;
+        callType: 'voice' | 'video';
+        incoming?: { callId: string; hostId: string; callType: 'voice' | 'video' };
+        outgoing?: { callType: 'voice' | 'video' };
+    } | null>(null);
+
     const [callModal, setCallModal] = useState<{
         outgoing?: {
             calleId: string;
@@ -144,6 +154,32 @@ const ChatPage: React.FC = () => {
             });
         }
     }, [isConnected, conversations, joinConversation]);
+
+    // Lắng nghe incoming GROUP call
+    useGroupCallSocket({
+        onStarted: (payload) => {
+            // Nhận thông báo nhóm bắt đầu gọi — chỉ mở nếu chưa đang gọi
+            if (callModal === null && groupCallModal === null) {
+                const conv = conversations.find((c: any) => c._id === payload.conversationId);
+                setGroupCallModal({
+                    conversationId: payload.conversationId,
+                    conversationName: conv?.name ?? 'Cuộc gọi nhóm',
+                    callType: payload.callType,
+                    incoming: {
+                        callId: payload.callId,
+                        hostId: payload.hostId,
+                        callType: payload.callType,
+                    },
+                });
+            }
+        },
+        onJoined: () => {},
+        onLeft: () => {},
+        onEnded: () => { setGroupCallModal(null); },
+        onOffer: () => {},
+        onAnswer: () => {},
+        onIceCandidate: () => {},
+    });
 
     // Lắng nghe incoming call toàn cục — chỉ mở modal khi chưa có call
     useCallSocket({
@@ -348,6 +384,9 @@ const ChatPage: React.FC = () => {
                     startCall: (params: { calleId: string; calleeName: string; calleeAvatar?: string | null; conversationId: string; callType: 'voice' | 'video' }) => {
                         setCallModal({ outgoing: params });
                     },
+                    startGroupCall: (params: { conversationId: string; conversationName: string; callType: 'voice' | 'video' }) => {
+                        setGroupCallModal({ ...params, outgoing: { callType: params.callType } });
+                    },
                     clearPendingGroupRequests: (cid: string) =>
                         setPendingGroupRequests(prev => {
                             const next = { ...prev };
@@ -358,12 +397,25 @@ const ChatPage: React.FC = () => {
             />
         </ChatLayout>
 
-        {/* Call Modal — mount ở root để nhận incoming call từ bất kỳ màn hình nào */}
+        {/* 1-1 Call Modal */}
         {callModal !== null && (
             <CallModal
                 outgoing={callModal.outgoing}
                 incoming={callModal.incoming}
                 onClose={() => setCallModal(null)}
+            />
+        )}
+
+        {/* Group Call Modal */}
+        {groupCallModal !== null && (
+            <GroupCallModal
+                conversationId={groupCallModal.conversationId}
+                conversationName={groupCallModal.conversationName}
+                currentUserId={user?.sub ?? ''}
+                currentUserName={user?.name ?? 'Bạn'}
+                incoming={groupCallModal.incoming}
+                outgoing={groupCallModal.outgoing}
+                onClose={() => setGroupCallModal(null)}
             />
         )}
         </>

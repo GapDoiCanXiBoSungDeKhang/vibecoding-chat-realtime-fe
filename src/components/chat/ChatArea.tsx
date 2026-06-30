@@ -40,7 +40,9 @@ interface ChatAreaProps {
     onClose?: () => void;
     onOpenInfo?: () => void;
     onStartCall?: (callType: 'voice' | 'video') => void;
+    onStartGroupCall?: (callType: 'voice' | 'video') => void;
     isPrivateChat?: boolean;
+    isGroupChat?: boolean;
 }
 
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "😡"];
@@ -173,7 +175,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     onClose,
     onOpenInfo,
     onStartCall,
+    onStartGroupCall,
     isPrivateChat = false,
+    isGroupChat = false,
 }) => {
     const { user } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -925,7 +929,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     >
                         <Search size={18} />
                     </button>
-                    {/* Chỉ hiện nút call cho private chat */}
+                    {/* Private chat: gọi 1-1 */}
                     {isPrivate && (
                         <>
                             <button
@@ -939,6 +943,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                 onClick={() => onStartCall?.('video')}
                                 className="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors"
                                 title="Gọi video"
+                            >
+                                <Video size={18} />
+                            </button>
+                        </>
+                    )}
+                    {/* Group chat: gọi nhóm */}
+                    {isGroupChat && (
+                        <>
+                            <button
+                                onClick={() => onStartGroupCall?.('voice')}
+                                className="p-2 text-gray-500 hover:bg-green-100 hover:text-green-600 rounded-full transition-colors"
+                                title="Gọi thoại nhóm"
+                            >
+                                <Phone size={18} />
+                            </button>
+                            <button
+                                onClick={() => onStartGroupCall?.('video')}
+                                className="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors"
+                                title="Gọi video nhóm"
                             >
                                 <Video size={18} />
                             </button>
