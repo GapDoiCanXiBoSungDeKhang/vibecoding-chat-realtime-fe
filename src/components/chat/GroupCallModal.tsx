@@ -102,7 +102,7 @@ const VideoTile = React.memo(({ participant, callType }: {
         </div>
       )}
       <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-        <span className="bg-black/50 rounded px-1.5 py-0.5 text-white text-[10px] font-medium truncate max-w-[80%]">
+        <span className="bg-black/70 backdrop-blur-sm rounded-md px-2 py-1 text-white text-[11px] font-semibold shadow-sm truncate max-w-[80%]">
           {participant.name}
         </span>
         {!participant.connected && (
@@ -139,7 +139,7 @@ const LocalTile = React.memo(({ name, callType, streamRef, isMuted }: {
         </div>
       )}
       <div className="absolute bottom-2 left-2 flex items-center gap-1">
-        <span className="bg-black/50 rounded px-1.5 py-0.5 text-white text-[10px] font-medium">
+        <span className="bg-black/70 backdrop-blur-sm rounded-md px-2 py-1 text-white text-[11px] font-semibold shadow-sm">
           {name} (Bạn)
         </span>
         {isMuted && <span className="text-red-400 text-[10px]">🔇</span>}
@@ -158,7 +158,8 @@ const GroupCallModal: React.FC<GroupCallModalProps> = ({
   outgoing,
   onClose,
 }) => {
-  const isHost = !!outgoing || incoming?.hostId === currentUserId;
+  // isHost là STATE (không phải const) vì có thể đổi khi bị redirect vào call đã có
+  const [isHost, setIsHost] = useState(!!outgoing || incoming?.hostId === currentUserId);
 
   const [callId, setCallId]       = useState(incoming?.callId ?? '');
   const [callType]                = useState<CallType>(incoming?.callType ?? outgoing?.callType ?? 'voice');
@@ -266,6 +267,17 @@ const GroupCallModal: React.FC<GroupCallModalProps> = ({
       if (hostId === currentUserId) return;
       setCallIdSync(cid);
       setPhaseSync('waiting');
+    },
+
+    // Conversation đã có call đang chạy — mình bị redirect vào call đó
+    // thay vì được là host của call mới (fix rejoin tạo call trùng)
+    onRedirect: ({ callId: cid, hostId }) => {
+      setCallIdSync(cid);
+      setIsHost(hostId === currentUserId);
+      // BE đã tự động join giúp mình (gọi onGroupCallJoin phía server) nên
+      // mình chuyển thẳng sang active — không cần bấm "Tham gia" lại
+      setPhaseSync('active');
+      if (!timerRef.current) startTimer();
     },
 
     onJoined: ({ userId, userInfo }) => {
@@ -442,18 +454,28 @@ const GroupCallModal: React.FC<GroupCallModalProps> = ({
           </div>
         </div>
 
-        {/* Video grid */}
-        <div className={`flex-1 overflow-y-auto p-3 grid ${gridCols} gap-2`}>
-          <LocalTile
-            name={currentUserName}
-            callType={callType}
-            streamRef={localStream}
-            isMuted={isMuted}
-          />
-          {participants.map(p => (
-            <VideoTile key={p.userId} participant={p} callType={callType} />
-          ))}
-        </div>
+        {/* Video grid — chỉ render khi call đang active, tránh camera bị "đứng hình"
+            hiển thị frame cuối cùng sau khi call đã kết thúc */}
+        {phase !== 'ended' ? (
+          <div className={`flex-1 overflow-y-auto p-3 grid ${gridCols} gap-2`}>
+            <LocalTile
+              name={currentUserName}
+              callType={callType}
+              streamRef={localStream}
+              isMuted={isMuted}
+            />
+            {participants.map(p => (
+              <VideoTile key={p.userId} participant={p} callType={callType} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-10">
+            <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
+              <PhoneOff size={24} className="text-red-400" />
+            </div>
+            <p className="text-white/60 text-sm">Cuộc gọi đã kết thúc</p>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="px-4 py-3 border-t border-white/10 flex-shrink-0">

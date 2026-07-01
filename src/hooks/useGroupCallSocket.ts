@@ -16,6 +16,8 @@ interface UseGroupCallSocketOptions {
   onEnded:  (payload: { callId: string; conversationId: string }) => void;
   // Danh sách participants hiện tại emit riêng cho user mới join
   onParticipants?: (payload: { callId: string; existingParticipants: { userId: string; name: string; avatar?: string }[] }) => void;
+  // Conversation đã có call đang chạy — redirect sang callId thật
+  onRedirect?: (payload: { callId: string; conversationId: string; hostId: string; callType: CallType }) => void;
   // WebRTC signaling reuse từ 1-1
   onOffer:        (payload: { callId: string; fromUserId: string; sdp: RTCSessionDescriptionInit }) => void;
   onAnswer:       (payload: { callId: string; fromUserId: string; sdp: RTCSessionDescriptionInit }) => void;
@@ -65,6 +67,7 @@ export const useGroupCallSocket = (options: UseGroupCallSocketOptions) => {
       group_call_left:         (p) => optsRef.current.onLeft(p),
       group_call_ended:        (p) => optsRef.current.onEnded(p),
       group_call_participants: (p) => optsRef.current.onParticipants?.(p),
+      group_call_redirect:     (p) => optsRef.current.onRedirect?.(p),
       call_offer:              (p) => optsRef.current.onOffer(p),
       call_answer:             (p) => optsRef.current.onAnswer(p),
       call_ice_candidate:      (p) => optsRef.current.onIceCandidate(p),
