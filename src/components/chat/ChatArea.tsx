@@ -25,7 +25,7 @@ import {
     ChevronRight,
     PhoneOff,
     PhoneMissed,
-
+    Users,
 } from "lucide-react";
 import { messageService } from "../../services/messageService";
 import { conversationService } from "../../services/conversationService";
@@ -73,8 +73,9 @@ const renderCallMessage = (
     msg: any,
     isMine: boolean,
     onStartCall?: (type: 'voice' | 'video') => void,
+    onStartGroupCall?: (type: 'voice' | 'video') => void,
 ) => {
-    const status = msg.callInfo?.status as 'ended' | 'missed' | 'cancelled' | undefined;
+    const status = msg.callInfo?.status as 'ended' | 'missed' | 'cancelled' | 'started' | undefined;
     const callType = msg.callInfo?.callType as 'voice' | 'video' | undefined;
     const duration = msg.callInfo?.duration as number | undefined;
 
@@ -82,6 +83,7 @@ const renderCallMessage = (
     const isMissed = status === 'missed';
     const isCancelled = status === 'cancelled';
     const isEnded = status === 'ended';
+    const isStarted = status === 'started'; // group call đang diễn ra
 
     const Icon = isMissed
         ? PhoneMissed
@@ -92,18 +94,19 @@ const renderCallMessage = (
         : Phone;
 
     const statusText = {
-        ended: isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
+        ended: isVideo ? 'Cuộc gọi video nhóm' : 'Cuộc gọi thoại nhóm',
         missed: isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ',
         cancelled: isVideo ? 'Cuộc gọi video đã huỷ' : 'Cuộc gọi thoại đã huỷ',
+        started: isVideo ? 'Cuộc gọi video nhóm đang diễn ra' : 'Cuộc gọi thoại nhóm đang diễn ra',
     }[status ?? 'ended'] ?? msg.content;
 
     const iconBg = isMine
-        ? isMissed || isCancelled ? 'bg-red-400/20' : 'bg-white/15'
-        : isMissed || isCancelled ? 'bg-red-50' : 'bg-green-50';
+        ? isMissed || isCancelled ? 'bg-red-400/20' : isStarted ? 'bg-green-400/20' : 'bg-white/15'
+        : isMissed || isCancelled ? 'bg-red-50' : isStarted ? 'bg-green-50' : 'bg-green-50';
 
     const iconColor = isMine
-        ? isMissed || isCancelled ? 'text-red-200' : 'text-white'
-        : isMissed || isCancelled ? 'text-red-500' : 'text-green-600';
+        ? isMissed || isCancelled ? 'text-red-200' : isStarted ? 'text-green-300' : 'text-white'
+        : isMissed || isCancelled ? 'text-red-500' : isStarted ? 'text-green-600' : 'text-green-600';
 
     return (
         <div className="flex flex-col gap-2 py-0.5 min-w-[180px]">
@@ -118,6 +121,10 @@ const renderCallMessage = (
                         <span className="text-xs opacity-60 leading-tight mt-0.5">
                             {formatCallDuration(duration)}
                         </span>
+                    ) : isStarted ? (
+                        <span className="text-xs text-green-500 leading-tight mt-0.5 animate-pulse">
+                            Nhấn để tham gia
+                        </span>
                     ) : isMissed ? (
                         <span className={`text-xs leading-tight mt-0.5 ${isMine ? 'text-red-200' : 'text-red-400'}`}>
                             Không có người nghe máy
@@ -130,7 +137,20 @@ const renderCallMessage = (
                 </div>
             </div>
             {/* Nút gọi lại — chỉ hiện khi là private chat và có onStartCall */}
-            {onStartCall && (
+            {/* Nút Gọi lại (private) hoặc Tham gia (group started) */}
+            {isStarted && onStartGroupCall ? (
+                <button
+                    onClick={() => onStartGroupCall(callType ?? 'voice')}
+                    className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5
+                        ${isMine
+                            ? 'bg-green-500/30 hover:bg-green-500/50 text-green-200'
+                            : 'bg-green-100 hover:bg-green-200 text-green-700'
+                        }`}
+                >
+                    <Users size={12} />
+                    Tham gia cuộc gọi
+                </button>
+            ) : !isStarted && onStartCall ? (
                 <button
                     onClick={() => onStartCall(callType ?? 'voice')}
                     className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5
@@ -142,7 +162,7 @@ const renderCallMessage = (
                     {isVideo ? <Video size={12} /> : <Phone size={12} />}
                     Gọi lại
                 </button>
-            )}
+            ) : null}
         </div>
     );
 };
@@ -1482,8 +1502,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                                 renderCallMessage(
                                                     msg,
                                                     isMine,
-                                                    // Chỉ hiện "Gọi lại" ở private chat
                                                     isPrivateChat ? onStartCall : undefined,
+                                                    isGroupChat ? onStartGroupCall : undefined,
                                                 )
                                             ) : (
                                                 <div className="flex flex-col gap-2">

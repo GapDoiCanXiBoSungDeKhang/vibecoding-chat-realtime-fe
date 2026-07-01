@@ -63,7 +63,7 @@ export interface Message {
   updatedAt: string;
   callInfo?: {
     callType: 'voice' | 'video';
-    status: 'missed' | 'ended' | 'cancelled';
+    status: 'missed' | 'ended' | 'cancelled' | 'started';
     duration?: number;
     startedAt?: string;
     endedAt?: string;
