@@ -28,6 +28,7 @@ import {
     Users,
 } from "lucide-react";
 import { messageService } from "../../services/messageService";
+import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import { conversationService } from "../../services/conversationService";
 import { useAuth } from "../../context/AuthContext";
 import Avatar from "../ui/Avatar";
@@ -1489,44 +1490,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                                     )}
                                                 </div>
                                             ) : msg.type === "voice" &&
-                                              !msg.isDeleted ? (
-                                                <div className="flex flex-col gap-1.5 p-1 bg-white/10 rounded-xl min-w-[200px]">
-                                                    <div className="flex items-center gap-3 px-2 py-1">
-                                                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                                                            <Mic size={16} />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
-                                                                Tin nhắn thoại
-                                                            </span>
-                                                            <span className="text-[9px] opacity-70">
-                                                                {msg
-                                                                    .attachments?.[0]
-                                                                    ?.duration
-                                                                    ? `${Math.round(msg.attachments[0].duration)} giây`
-                                                                    : "Đã ghi âm"}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <audio
-                                                        src={
-                                                            msg.attachments?.[0]
-                                                                ?.url
-                                                        }
-                                                        controls
-                                                        preload="metadata"
-                                                        className="h-8 w-full invert opacity-90"
-                                                    >
-                                                        <source
-                                                            src={
-                                                                msg
-                                                                    .attachments?.[0]
-                                                                    ?.url
-                                                            }
-                                                            type="audio/webm"
-                                                        />
-                                                    </audio>
-                                                </div>
+                                              !msg.isDeleted &&
+                                              msg.attachments?.[0]?.url ? (
+                                                <VoiceMessagePlayer
+                                                    src={msg.attachments[0].url}
+                                                    isMine={isMine}
+                                                    initialDuration={
+                                                        msg.attachments[0].duration ?? 0
+                                                    }
+                                                />
                                             ) : msg.type === "call" &&
                                               !msg.isDeleted ? (
                                                 renderCallMessage(
