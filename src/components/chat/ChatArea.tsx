@@ -277,10 +277,40 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         [activeChat, user?.sub],
     );
 
+    // Gộp linkPreviews vào message đã tồn tại theo messageId (không tạo message mới)
+    const handleLinkPreview = useCallback((payload: any[]) => {
+        if (!Array.isArray(payload) || payload.length === 0) return;
+
+        // Nhóm theo messageId — 1 message có thể có nhiều link
+        const byMessageId = payload.reduce<Record<string, any[]>>((acc, lp) => {
+            const mid = (lp.messageId?._id || lp.messageId)?.toString();
+            if (!mid) return acc;
+            if (!acc[mid]) acc[mid] = [];
+            acc[mid].push(lp);
+            return acc;
+        }, {});
+
+        setMessages((prev) =>
+            prev.map((m) => {
+                const links = byMessageId[m._id];
+                if (!links) return m;
+                // Merge, tránh trùng theo url
+                const existingUrls = new Set((m.linkPreviews || []).map((l: any) => l.url));
+                const newLinks = links.filter((l) => !existingUrls.has(l.url));
+                if (newLinks.length === 0) return m;
+                return {
+                    ...m,
+                    linkPreviews: [...(m.linkPreviews || []), ...newLinks],
+                };
+            }),
+        );
+    }, []);
+
     const { isTyping, notifyTyping, stopTyping } = useMessageSocket({
         activeChat,
         currentUserId: user?.sub,
         onNewMessage: handleNewMessage,
+        onLinkPreview: handleLinkPreview,
         onConversationUpdate: () => fetchChatData(),
         onMessageEdited: (payload: any) => {
             const edited = payload.message || payload;
@@ -1547,15 +1577,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                                                                 />
                                                                             )}
                                                                             <div className="p-2.5">
-                                                                                {lp.siteName && (
-                                                                                    <div
-                                                                                        className={`text-[9px] font-black uppercase tracking-wider mb-1 ${isMine ? "text-white/70" : "text-blue-600"}`}
-                                                                                    >
-                                                                                        {
-                                                                                            lp.siteName
-                                                                                        }
-                                                                                    </div>
-                                                                                )}
+                                                                                <div
+                                                                                    className={`text-[9px] font-black uppercase tracking-wider mb-1 ${isMine ? "text-white/70" : "text-blue-600"}`}
+                                                                                >
+                                                                                    {lp.siteName ||
+                                                                                        (() => {
+                                                                                            try {
+                                                                                                return new URL(lp.url).hostname.replace(/^www\./, "");
+                                                                                            } catch {
+                                                                                                return "";
+                                                                                            }
+                                                                                        })()}
+                                                                                </div>
                                                                                 <div
                                                                                     className={`text-xs font-bold line-clamp-2 mb-1 ${isMine ? "text-white" : "text-gray-900"}`}
                                                                                 >

@@ -14,6 +14,9 @@ interface UseMessageSocketProps {
     onMessagePinned?: (payload: any) => void;
     onMessageUnpinned?: (payload: any) => void;
     onMessageForwarded?: (payload: any) => void;
+    // Payload: mảng LinkPreview docs [{ messageId, url, title, description, image }]
+    // KHÔNG phải Message object — cần gộp vào message đã tồn tại theo messageId
+    onLinkPreview?: (payload: any[]) => void;
 }
 
 export const useMessageSocket = ({
@@ -28,6 +31,7 @@ export const useMessageSocket = ({
     onMessagePinned,
     onMessageUnpinned,
     onMessageForwarded,
+    onLinkPreview,
 }: UseMessageSocketProps) => {
     const {
         socket,
@@ -47,12 +51,13 @@ export const useMessageSocket = ({
         if (!socket) return;
 
         // ── New message arrival events ──
+        // "new_message_linkPreview" KHÔNG nằm trong nhóm này — payload của nó là
+        // mảng LinkPreview docs, khác cấu trúc Message hoàn toàn
         const arrivalEvents = [
             "new_message",
             "new_message_file",
             "new_message_media",
             "new_message_voice",
-            "new_message_linkPreview",
             "new_message_call",
             "message_system_room",
         ];
@@ -61,6 +66,13 @@ export const useMessageSocket = ({
             socket.on(evt, (payload: any) => {
                 onNewMessage(payload);
             });
+        });
+
+        // Link preview đến sau khi message text đã tồn tại — cần gộp vào message cũ
+        socket.on("new_message_linkPreview", (payload: any[]) => {
+            if (onLinkPreview) {
+                onLinkPreview(payload);
+            }
         });
 
         // ── message_edited ──
