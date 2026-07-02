@@ -254,6 +254,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    // Lưu vị trí scroll TRƯỚC khi load tin nhắn cũ, để restore sau khi prepend
+    // — tránh giật màn hình (content mới chèn phía trên làm view bị đẩy xuống)
+    const prevScrollHeightRef = useRef(0);
+    const prevScrollTopRef = useRef(0);
+    const shouldRestoreScrollRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const mediaInputRef = useRef<HTMLInputElement>(null);
 
@@ -477,8 +483,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         } catch {}
     };
 
-    const loadMore = async () => {
+    const loadMore = useCallback(async () => {
         if (!hasMore || loadingMore || !nextCursor) return;
+
+        // Capture vị trí scroll TRƯỚC khi thêm tin nhắn cũ vào đầu danh sách
+        const container = messagesContainerRef.current;
+        if (container) {
+            prevScrollHeightRef.current = container.scrollHeight;
+            prevScrollTopRef.current = container.scrollTop;
+            shouldRestoreScrollRef.current = true;
+        }
+
         setLoadingMore(true);
         try {
             const data = await messageService.getMessages(
@@ -493,7 +508,31 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         } finally {
             setLoadingMore(false);
         }
-    };
+    }, [hasMore, loadingMore, nextCursor, activeChat]);
+
+    // Restore vị trí scroll sau khi DOM đã render tin nhắn cũ mới thêm vào
+    // — giữ nguyên tin nhắn đang xem trên màn hình, không bị nhảy xuống dưới
+    useEffect(() => {
+        if (shouldRestoreScrollRef.current && messagesContainerRef.current) {
+            const container = messagesContainerRef.current;
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop =
+                newScrollHeight - prevScrollHeightRef.current + prevScrollTopRef.current;
+            shouldRestoreScrollRef.current = false;
+        }
+    }, [messages]);
+
+    // Auto-trigger load more khi scroll gần lên đầu danh sách (infinite scroll)
+    const handleMessagesScroll = useCallback(
+        (e: React.UIEvent<HTMLDivElement>) => {
+            const el = e.currentTarget;
+            // Cách đầu 120px thì bắt đầu tải thêm — đủ sớm để mượt, không tải dư thừa
+            if (el.scrollTop < 120 && hasMore && !loadingMore) {
+                loadMore();
+            }
+        },
+        [hasMore, loadingMore, loadMore],
+    );
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1237,24 +1276,31 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 </div>
             )}
 
-            {/* Load More */}
-            {hasMore && (
-                <div className="flex justify-center py-2 bg-white/80">
-                    <button
-                        onClick={loadMore}
-                        disabled={loadingMore}
-                        className="text-xs text-blue-500 hover:underline flex items-center gap-1"
-                    >
+            {/* Messages — infinite scroll: tự động tải tin nhắn cũ khi cuộn gần lên đầu */}
+            <div
+                ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
+                className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-[#f0f4ff]/30"
+            >
+                {/* Spinner nhỏ khi đang tải tin nhắn cũ — nằm trong luồng scroll,
+                    không phải nút bấm cố định như trước */}
+                {hasMore && (
+                    <div className="flex justify-center py-2">
                         {loadingMore ? (
-                            <Loader2 size={12} className="animate-spin" />
-                        ) : null}{" "}
-                        Tải thêm tin nhắn cũ
-                    </button>
-                </div>
-            )}
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-[#f0f4ff]/30">
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                <Loader2 size={12} className="animate-spin" />
+                                Đang tải tin nhắn cũ...
+                            </div>
+                        ) : (
+                            <button
+                                onClick={loadMore}
+                                className="text-xs text-blue-400 hover:text-blue-600 hover:underline"
+                            >
+                                Tải thêm tin nhắn cũ
+                            </button>
+                        )}
+                    </div>
+                )}
                 {isLoading ? (
                     <div className="h-full flex items-center justify-center">
                         <Loader2
