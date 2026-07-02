@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { messageService } from "../../services/messageService";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import MessageErrorBoundary from "./MessageErrorBoundary";
 import { conversationService } from "../../services/conversationService";
 import { useAuth } from "../../context/AuthContext";
 import Avatar from "../ui/Avatar";
@@ -263,7 +264,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 payload.attachments &&
                 (!msg.attachments || msg.attachments.length === 0)
             ) {
-                msg = { ...msg, attachments: payload.attachments };
+                // Chuẩn hóa thành mảng — BE có thể trả 1 object đơn (voice) hoặc
+                // mảng (file/media), tránh bug msg.attachments?.[0] ra undefined
+                const normalizedAttachments = Array.isArray(payload.attachments)
+                    ? payload.attachments
+                    : [payload.attachments];
+                msg = { ...msg, attachments: normalizedAttachments };
             }
             setMessages((prev) => [...prev, msg]);
             setTimeout(() => {
@@ -1275,7 +1281,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         if (isSystem)
                             return (
                                 <div
-                                    key={msg._id || i}
+                                    key={(msg._id && msg._id.toString()) || `tmp-${i}`}
                                     className="flex justify-center py-1"
                                 >
                                     <span className="text-[11px] text-gray-400 bg-gray-100/80 px-3 py-1 rounded-full">
@@ -1296,7 +1302,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         return (
                             <div
                                 id={`msg-${msg._id}`}
-                                key={msg._id || i}
+                                key={(msg._id && msg._id.toString()) || `tmp-${i}`}
                                 className={`flex ${isMine ? "justify-end" : "justify-start"} group transition-colors duration-500`}
                             >
                                 <div
@@ -1492,21 +1498,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                             ) : msg.type === "voice" &&
                                               !msg.isDeleted &&
                                               msg.attachments?.[0]?.url ? (
-                                                <VoiceMessagePlayer
-                                                    src={msg.attachments[0].url}
-                                                    isMine={isMine}
-                                                    initialDuration={
-                                                        msg.attachments[0].duration ?? 0
-                                                    }
-                                                />
+                                                <MessageErrorBoundary isMine={isMine}>
+                                                    <VoiceMessagePlayer
+                                                        src={msg.attachments[0].url}
+                                                        isMine={isMine}
+                                                        initialDuration={
+                                                            msg.attachments[0].duration ?? 0
+                                                        }
+                                                    />
+                                                </MessageErrorBoundary>
                                             ) : msg.type === "call" &&
                                               !msg.isDeleted ? (
-                                                renderCallMessage(
-                                                    msg,
-                                                    isMine,
-                                                    isPrivateChat ? onStartCall : undefined,
-                                                    isGroupChat ? onStartGroupCall : undefined,
-                                                )
+                                                <MessageErrorBoundary isMine={isMine}>
+                                                    {renderCallMessage(
+                                                        msg,
+                                                        isMine,
+                                                        isPrivateChat ? onStartCall : undefined,
+                                                        isGroupChat ? onStartGroupCall : undefined,
+                                                    )}
+                                                </MessageErrorBoundary>
                                             ) : (
                                                 <div className="flex flex-col gap-2">
                                                     <span className="break-words">
