@@ -10,9 +10,12 @@ import {
     X,
     Bell,
     Moon,
-    Globe,
     Lock,
     Settings,
+    Eye,
+    EyeOff,
+    MessageSquareText,
+    Radio,
 } from "lucide-react";
 import { userService } from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
@@ -37,6 +40,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const [avatar, setAvatar] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
 
+    // Privacy states
+    const [lastSeenVisibility, setLastSeenVisibility] = useState<
+        "everyone" | "friends" | "nobody"
+    >("everyone");
+    const [showReadReceipts, setShowReadReceipts] = useState(true);
+    const [showTypingIndicator, setShowTypingIndicator] = useState(true);
+    const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
+
+    // Status states
+    const [status, setStatus] = useState<
+        "online" | "away" | "busy" | "offline"
+    >("online");
+    const [customStatusMessage, setCustomStatusMessage] = useState("");
+    const [isSavingStatus, setIsSavingStatus] = useState(false);
+
     useEffect(() => {
         if (user?.sub) {
             fetchProfile();
@@ -50,10 +68,85 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             setEmail(data.email || "");
             setPhone(data.phone || "");
             setPreview(data.avatar || null);
+
+            // Status — lấy trực tiếp từ profile response (không cần API riêng)
+            setStatus(data.status || "online");
+            setCustomStatusMessage(data.customStatusMessage || "");
+
+            // Privacy — dùng endpoint riêng để đảm bảo dữ liệu chuẩn nhất
+            try {
+                const privacy = await userService.getPrivacy();
+                setLastSeenVisibility(
+                    privacy?.lastSeenVisibility || "everyone",
+                );
+                setShowReadReceipts(privacy?.showReadReceipts ?? true);
+                setShowTypingIndicator(
+                    privacy?.showTypingIndicator ?? true,
+                );
+            } catch {
+                // Fallback: nếu endpoint riêng lỗi, dùng privacy nested trong profile
+                if (data.privacy) {
+                    setLastSeenVisibility(
+                        data.privacy.lastSeenVisibility || "everyone",
+                    );
+                    setShowReadReceipts(
+                        data.privacy.showReadReceipts ?? true,
+                    );
+                    setShowTypingIndicator(
+                        data.privacy.showTypingIndicator ?? true,
+                    );
+                }
+            }
         } catch (error) {
             toast.error("Failed to load profile");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // Auto-save privacy — gọi ngay khi user đổi 1 trong 3 setting, không cần nút Save riêng
+    const savePrivacy = async (
+        overrides: Partial<{
+            lastSeenVisibility: "everyone" | "friends" | "nobody";
+            showReadReceipts: boolean;
+            showTypingIndicator: boolean;
+        }>,
+    ) => {
+        setIsSavingPrivacy(true);
+        try {
+            const payload = {
+                lastSeenVisibility,
+                showReadReceipts,
+                showTypingIndicator,
+                ...overrides,
+            };
+            await userService.updatePrivacy(payload);
+            toast.success("Đã cập nhật quyền riêng tư");
+        } catch {
+            toast.error("Không thể cập nhật quyền riêng tư");
+        } finally {
+            setIsSavingPrivacy(false);
+        }
+    };
+
+    // Auto-save status khi đổi dropdown; customStatusMessage lưu khi blur input
+    const saveStatus = async (
+        overrides: Partial<{
+            status: "online" | "away" | "busy" | "offline";
+            customStatusMessage: string;
+        }>,
+    ) => {
+        setIsSavingStatus(true);
+        try {
+            const nextStatus = overrides.status ?? status;
+            const nextMessage =
+                overrides.customStatusMessage ?? customStatusMessage;
+            await userService.updateStatus(nextStatus, nextMessage);
+            toast.success("Đã cập nhật trạng thái");
+        } catch {
+            toast.error("Không thể cập nhật trạng thái");
+        } finally {
+            setIsSavingStatus(false);
         }
     };
 
@@ -283,54 +376,262 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
                                         <div>
                                             <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                                                Account Settings
+                                                Trạng thái & Quyền riêng tư
                                             </h3>
                                             <p className="text-gray-500">
-                                                Manage your security and privacy
-                                                preferences.
+                                                Quản lý trạng thái hoạt động và
+                                                ai có thể thấy thông tin của
+                                                bạn.
                                             </p>
                                         </div>
 
+                                        {/* ── Trạng thái hoạt động ── */}
                                         <div className="space-y-4">
-                                            <div className="p-5 border border-gray-100 rounded-2xl flex items-center justify-between hover:bg-gray-50 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-3 bg-green-50 rounded-xl text-green-600">
-                                                        <Lock size={20} />
+                                            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-400">
+                                                <Radio size={13} />
+                                                Trạng thái hoạt động
+                                                {isSavingStatus && (
+                                                    <Loader2
+                                                        size={12}
+                                                        className="animate-spin text-blue-500"
+                                                    />
+                                                )}
+                                            </div>
+
+                                            <div className="p-5 border border-gray-100 rounded-2xl space-y-4">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    {(
+                                                        [
+                                                            {
+                                                                value: "online",
+                                                                label: "Trực tuyến",
+                                                                color: "bg-green-500",
+                                                            },
+                                                            {
+                                                                value: "away",
+                                                                label: "Vắng mặt",
+                                                                color: "bg-yellow-500",
+                                                            },
+                                                            {
+                                                                value: "busy",
+                                                                label: "Bận",
+                                                                color: "bg-red-500",
+                                                            },
+                                                            {
+                                                                value: "offline",
+                                                                label: "Ẩn",
+                                                                color: "bg-gray-400",
+                                                            },
+                                                        ] as const
+                                                    ).map((opt) => (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setStatus(
+                                                                    opt.value,
+                                                                );
+                                                                saveStatus({
+                                                                    status: opt.value,
+                                                                });
+                                                            }}
+                                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                                                                status ===
+                                                                opt.value
+                                                                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                                                            }`}
+                                                        >
+                                                            <span
+                                                                className={`w-2.5 h-2.5 rounded-full ${opt.color}`}
+                                                            />
+                                                            {opt.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-xs font-semibold text-gray-500 ml-1">
+                                                        Trạng thái tùy chỉnh
+                                                        (tối đa 80 ký tự)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={
+                                                            customStatusMessage
+                                                        }
+                                                        maxLength={80}
+                                                        placeholder="VD: Đang tập trung code 🚀"
+                                                        onChange={(e) =>
+                                                            setCustomStatusMessage(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        onBlur={() =>
+                                                            saveStatus({})
+                                                        }
+                                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* ── Quyền riêng tư ── */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-400">
+                                                <Shield size={13} />
+                                                Quyền riêng tư
+                                                {isSavingPrivacy && (
+                                                    <Loader2
+                                                        size={12}
+                                                        className="animate-spin text-blue-500"
+                                                    />
+                                                )}
+                                            </div>
+
+                                            {/* Lần cuối truy cập */}
+                                            <div className="p-5 border border-gray-100 rounded-2xl flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-4 min-w-0">
+                                                    <div className="p-3 bg-purple-50 rounded-xl text-purple-600 flex-shrink-0">
+                                                        <Eye size={20} />
                                                     </div>
-                                                    <div>
+                                                    <div className="min-w-0">
                                                         <div className="font-bold">
-                                                            Two-Factor
-                                                            Authentication
+                                                            Ai thấy lần truy
+                                                            cập cuối
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            Add an extra layer
-                                                            of security to your
-                                                            account.
+                                                            Kiểm soát ai có
+                                                            thể xem thời gian
+                                                            bạn online gần
+                                                            nhất.
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <button className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium">
-                                                    Enable
-                                                </button>
+                                                <select
+                                                    value={
+                                                        lastSeenVisibility
+                                                    }
+                                                    onChange={(e) => {
+                                                        const val = e.target
+                                                            .value as
+                                                            | "everyone"
+                                                            | "friends"
+                                                            | "nobody";
+                                                        setLastSeenVisibility(
+                                                            val,
+                                                        );
+                                                        savePrivacy({
+                                                            lastSeenVisibility:
+                                                                val,
+                                                        });
+                                                    }}
+                                                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium outline-none focus:border-blue-500 flex-shrink-0"
+                                                >
+                                                    <option value="everyone">
+                                                        Mọi người
+                                                    </option>
+                                                    <option value="friends">
+                                                        Bạn bè
+                                                    </option>
+                                                    <option value="nobody">
+                                                        Không ai
+                                                    </option>
+                                                </select>
                                             </div>
 
+                                            {/* Đã xem tin nhắn */}
                                             <div className="p-5 border border-gray-100 rounded-2xl flex items-center justify-between hover:bg-gray-50 transition-colors">
                                                 <div className="flex items-center gap-4">
                                                     <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-                                                        <Globe size={20} />
+                                                        <EyeOff size={20} />
                                                     </div>
                                                     <div>
                                                         <div className="font-bold">
-                                                            Active Sessions
+                                                            Hiển thị đã xem
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            Manage where you're
-                                                            currently logged in.
+                                                            Cho người khác
+                                                            biết khi bạn đã
+                                                            xem tin nhắn của
+                                                            họ.
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <button className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium">
-                                                    View All
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const next =
+                                                            !showReadReceipts;
+                                                        setShowReadReceipts(
+                                                            next,
+                                                        );
+                                                        savePrivacy({
+                                                            showReadReceipts:
+                                                                next,
+                                                        });
+                                                    }}
+                                                    className={`w-12 h-6 rounded-full relative transition-colors flex-shrink-0 ${
+                                                        showReadReceipts
+                                                            ? "bg-blue-600"
+                                                            : "bg-gray-200"
+                                                    }`}
+                                                >
+                                                    <div
+                                                        className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm transition-all ${
+                                                            showReadReceipts
+                                                                ? "right-0.5"
+                                                                : "left-0.5"
+                                                        }`}
+                                                    />
+                                                </button>
+                                            </div>
+
+                                            {/* Đang nhập... */}
+                                            <div className="p-5 border border-gray-100 rounded-2xl flex items-center justify-between hover:bg-gray-50 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-3 bg-green-50 rounded-xl text-green-600">
+                                                        <MessageSquareText
+                                                            size={20}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold">
+                                                            Hiển thị đang nhập
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            Cho người khác
+                                                            biết khi bạn đang
+                                                            soạn tin nhắn.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const next =
+                                                            !showTypingIndicator;
+                                                        setShowTypingIndicator(
+                                                            next,
+                                                        );
+                                                        savePrivacy({
+                                                            showTypingIndicator:
+                                                                next,
+                                                        });
+                                                    }}
+                                                    className={`w-12 h-6 rounded-full relative transition-colors flex-shrink-0 ${
+                                                        showTypingIndicator
+                                                            ? "bg-blue-600"
+                                                            : "bg-gray-200"
+                                                    }`}
+                                                >
+                                                    <div
+                                                        className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm transition-all ${
+                                                            showTypingIndicator
+                                                                ? "right-0.5"
+                                                                : "left-0.5"
+                                                        }`}
+                                                    />
                                                 </button>
                                             </div>
                                         </div>

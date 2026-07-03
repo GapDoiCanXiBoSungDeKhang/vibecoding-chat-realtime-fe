@@ -28,6 +28,11 @@ export const userService = {
         return response.data;
     },
 
+    async getPrivacy() {
+        const response = await api.get("/users/privacy");
+        return response.data;
+    },
+
     async blockUser(userId: string) {
         const response = await api.post(`/users/block/${userId}`);
         return response.data;
