@@ -61,12 +61,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         }
     }, [user]);
 
+    // Giải phóng object URL của avatar preview khi component unmount
+    // (đóng modal mà chưa Save) — tránh memory leak
+    useEffect(() => {
+        return () => {
+            if (preview && preview.startsWith("blob:")) {
+                URL.revokeObjectURL(preview);
+            }
+        };
+    }, [preview]);
+
     const fetchProfile = async () => {
         try {
             const data = await userService.getCurrentProfile(user.sub);
             setName(data.name || "");
             setEmail(data.email || "");
-            setPhone(data.phone || "");
+            setPhone(data.phoneNumber || "");
             setPreview(data.avatar || null);
 
             // Status — lấy trực tiếp từ profile response (không cần API riêng)
@@ -152,10 +162,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setAvatar(file);
-            setPreview(URL.createObjectURL(file));
+        if (!file) return;
+
+        // Validate loại file và kích thước trước khi tạo preview
+        if (!file.type.startsWith("image/")) {
+            toast.error("Vui lòng chọn file ảnh (jpg, png, webp...)");
+            return;
         }
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Ảnh đại diện tối đa 5MB");
+            return;
+        }
+
+        // useEffect cleanup phía trên sẽ tự động revoke object URL cũ khi
+        // preview đổi giá trị — không cần revoke thủ công ở đây
+        setAvatar(file);
+        setPreview(URL.createObjectURL(file));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

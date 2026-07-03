@@ -1005,7 +1005,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             {/* Header */}
             <header className="h-16 px-5 bg-white border-b border-gray-100 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
                 <div className="flex items-center gap-3">
-                    <Avatar name={headerName || "?"} size="md" />
+                    <Avatar
+                        src={headerOther?.avatar}
+                        name={headerName || "?"}
+                        size="md"
+                    />
                     <div>
                         <div className="font-bold text-gray-900 text-[15px]">
                             {headerName || "…"}
@@ -1384,6 +1388,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                         <div className="self-end flex-shrink-0 w-7">
                                             {!sameAuthor ? (
                                                 <Avatar
+                                                    src={
+                                                        msg.senderId?.avatar
+                                                    }
                                                     name={
                                                         msg.senderId?.name ||
                                                         "U"
@@ -2259,6 +2266,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                         className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${idx === selectedMentionIndex ? "bg-blue-50" : "hover:bg-gray-50"}`}
                                     >
                                         <Avatar
+                                            src={p.userId?.avatar}
                                             name={p.userId?.name}
                                             size="xs"
                                         />

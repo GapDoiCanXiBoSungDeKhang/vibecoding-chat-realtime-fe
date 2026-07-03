@@ -235,7 +235,11 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                         }`}
                                     >
                                         <div className="relative flex-shrink-0">
-                                            <Avatar name={convName} size="md" />
+                                            <Avatar
+                                                src={otherParticipant?.avatar}
+                                                name={convName}
+                                                size="md"
+                                            />
                                             {/* Chấm trạng thái — góc dưới phải, chỉ cho private chat */}
                                             {isPrivate && presence && (
                                                 <div

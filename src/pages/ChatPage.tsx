@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { conversationService } from "../services/conversationService";
+import { userService } from "../services/userService";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import SettingsModal from "../components/chat/SettingsModal";
@@ -86,6 +87,9 @@ const ChatPage: React.FC = () => {
     const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
     const [isCreatePrivateOpen, setIsCreatePrivateOpen] = useState(false);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
+    // Avatar của chính mình — AuthContext.user chỉ decode từ JWT (không có
+    // avatar), nên cần fetch riêng để hiện đúng ảnh đại diện trên SidebarPrimary
+    const [myAvatarUrl, setMyAvatarUrl] = useState<string | null>(null);
 
     // Fetch pending friend requests count on mount
     useEffect(() => {
@@ -93,6 +97,20 @@ const ChatPage: React.FC = () => {
             .then((data) => setPendingFriendCount(data?.length ?? 0))
             .catch(() => {});
     }, []);
+
+    // Fetch avatar của chính mình lúc mount — dùng cho SidebarPrimary
+    const fetchMyAvatar = () => {
+        if (!user?.sub) return;
+        userService
+            .getCurrentProfile(user.sub)
+            .then((data) => setMyAvatarUrl(data?.avatar || null))
+            .catch(() => {});
+    };
+
+    useEffect(() => {
+        fetchMyAvatar();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.sub]);
 
     // Restore pending group request badges sau khi refresh
     // Fetch pending count cho tất cả group conversations
@@ -307,6 +325,7 @@ const ChatPage: React.FC = () => {
             primarySidebar={
                 <SidebarPrimary
                     user={user}
+                    avatarUrl={myAvatarUrl}
                     currentView={currentView}
                     setCurrentView={(view) =>
                         navigate(view === "contacts" ? "/friends" : "/chat")
@@ -349,7 +368,15 @@ const ChatPage: React.FC = () => {
         >
             {/* Modals */}
             {isSettingsOpen && (
-                <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+                <SettingsModal
+                    onClose={() => {
+                        setIsSettingsOpen(false);
+                        // Đóng modal xong thì refetch avatar — nếu vừa đổi ảnh
+                        // đại diện, SidebarPrimary sẽ cập nhật ngay không cần
+                        // đăng nhập lại
+                        fetchMyAvatar();
+                    }}
+                />
             )}
             {isCreateGroupOpen && (
                 <CreateGroupModal

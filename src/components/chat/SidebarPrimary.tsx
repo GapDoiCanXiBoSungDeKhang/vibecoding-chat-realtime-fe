@@ -11,6 +11,7 @@ import Avatar from "../ui/Avatar";
 
 interface SidebarPrimaryProps {
     user: any;
+    avatarUrl?: string | null;
     currentView: string;
     setCurrentView: (view: "chats" | "contacts") => void;
     onOpenSettings: () => void;
@@ -21,6 +22,7 @@ interface SidebarPrimaryProps {
 
 const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
     user,
+    avatarUrl,
     currentView,
     setCurrentView,
     onOpenSettings,
@@ -37,12 +39,14 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
                 title="Cài đặt tài khoản"
             >
                 <Avatar
+                    src={avatarUrl || undefined}
                     name={user?.name}
                     size="md"
                     className="border-2 border-white/30"
                 />
                 <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/10 transition-colors" />
             </div>
+
 
             {/* Navigation */}
             <div className="flex flex-col gap-1 w-full">
