@@ -2,6 +2,12 @@ import React, { createContext, useContext, useEffect, useState, type ReactNode }
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
+export interface UserPresence {
+  status: 'online' | 'away' | 'busy' | 'offline';
+  customStatusMessage?: string | null;
+  lastSeen?: string | null;
+}
+
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -9,6 +15,8 @@ interface SocketContextType {
   leaveConversation: (conversationId: string) => void;
   emitTypingStart: (conversationId: string) => void;
   emitTypingStop: (conversationId: string) => void;
+  // Presence real-time — cập nhật ngay khi bất kỳ user nào đổi trạng thái
+  presenceMap: Record<string, UserPresence>;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -18,6 +26,7 @@ const SocketContext = createContext<SocketContextType>({
   leaveConversation: () => {},
   emitTypingStart: () => {},
   emitTypingStop: () => {},
+  presenceMap: {},
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -30,6 +39,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
 
   useEffect(() => {
     // Only connect if user is logged in
@@ -59,6 +69,24 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     newSocket.on('disconnect', () => {
       console.log('Socket disconnected');
       setIsConnected(false);
+    });
+
+    // Lắng nghe presence real-time — BE broadcast toàn cục mỗi khi 1 user đổi
+    // trạng thái (online/away/busy/offline) hoặc custom status message
+    newSocket.on('user_status_changed', (payload: {
+      userId: string;
+      status: UserPresence['status'];
+      customStatusMessage?: string | null;
+      lastSeen?: string | null;
+    }) => {
+      setPresenceMap((prev) => ({
+        ...prev,
+        [payload.userId]: {
+          status: payload.status,
+          customStatusMessage: payload.customStatusMessage ?? null,
+          lastSeen: payload.lastSeen ?? null,
+        },
+      }));
     });
 
     setSocket(newSocket);
@@ -102,6 +130,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         leaveConversation,
         emitTypingStart,
         emitTypingStop,
+        presenceMap,
       }}
     >
       {children}

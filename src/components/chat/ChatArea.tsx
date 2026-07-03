@@ -28,6 +28,7 @@ import {
     Users,
 } from "lucide-react";
 import { messageService } from "../../services/messageService";
+import { useSocket } from "../../context/SocketContext";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import MessageErrorBoundary from "./MessageErrorBoundary";
 import { conversationService } from "../../services/conversationService";
@@ -202,6 +203,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     isGroupChat = false,
 }) => {
     const { user } = useAuth();
+    const { presenceMap } = useSocket();
     const [messages, setMessages] = useState<Message[]>([]);
     const [conversationInfo, setConversationInfo] =
         useState<Conversation | null>(null);
@@ -954,6 +956,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         (p: any) => p.userId?._id === user?.sub,
     )?.role;
 
+    // Presence real-time — ưu tiên dữ liệu socket mới nhất, fallback về
+    // snapshot lúc fetch conversation (đề phòng chưa nhận được socket event nào)
+    const otherPresence = headerOther
+        ? presenceMap[headerOther._id] ?? {
+              status: headerOther.status ?? "offline",
+              customStatusMessage: headerOther.customStatusMessage ?? null,
+              lastSeen: headerOther.lastSeen ?? null,
+          }
+        : null;
+
     if (!activeChat)
         return (
             <div className="h-full flex flex-col items-center justify-center text-center p-12 bg-white">
@@ -1000,9 +1012,23 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         </div>
                         <div className="text-[11px] text-gray-400">
                             {isPrivate ? (
-                                headerOther?.isOnline ? (
-                                    <span className="text-green-500">
-                                        Đang hoạt động
+                                otherPresence?.status === "online" ? (
+                                    <span className="text-green-500 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                        {otherPresence.customStatusMessage ||
+                                            "Đang hoạt động"}
+                                    </span>
+                                ) : otherPresence?.status === "away" ? (
+                                    <span className="text-yellow-500 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />
+                                        {otherPresence.customStatusMessage ||
+                                            "Vắng mặt"}
+                                    </span>
+                                ) : otherPresence?.status === "busy" ? (
+                                    <span className="text-red-500 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                                        {otherPresence.customStatusMessage ||
+                                            "Bận"}
                                     </span>
                                 ) : (
                                     "Ngoại tuyến"
