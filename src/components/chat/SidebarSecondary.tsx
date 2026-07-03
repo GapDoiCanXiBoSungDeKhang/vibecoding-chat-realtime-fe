@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Avatar from "../ui/Avatar";
 import { conversationService } from "../../services/conversationService";
+import { useSocket } from "../../context/SocketContext";
 import toast from "react-hot-toast";
 
 
@@ -60,6 +61,26 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
     const [archivedConvs, setArchivedConvs] = useState<any[]>([]);
     const [isArchivedOpen, setIsArchivedOpen] = useState(false);
     const [isArchivedLoading, setIsArchivedLoading] = useState(false);
+    const { presenceMap } = useSocket();
+
+    // Presence real-time — ưu tiên socket, fallback snapshot lúc fetch conversation
+    const getPresence = (other: any) => {
+        if (!other) return null;
+        const otherId = other._id || other;
+        return (
+            presenceMap[otherId] ?? {
+                status: other.status ?? "offline",
+                customStatusMessage: other.customStatusMessage ?? null,
+            }
+        );
+    };
+
+    const statusDotColor: Record<string, string> = {
+        online: "bg-green-500",
+        away: "bg-yellow-500",
+        busy: "bg-red-500",
+        offline: "bg-gray-300",
+    };
 
     const fetchArchived = async () => {
         setIsArchivedLoading(true);
@@ -184,14 +205,19 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                             filtered.map((conv) => {
                                 const isPrivate = conv.type === "private";
                                 let convName = conv.name;
+                                let otherParticipant: any = null;
                                 if (isPrivate && conv.participants) {
-                                    const other = conv.participants.find(
+                                    otherParticipant = conv.participants.find(
                                         (p: any) =>
                                             (p.userId?._id || p.userId) !==
                                             currentUserId,
                                     )?.userId;
-                                    convName = other?.name || "Người dùng";
+                                    convName =
+                                        otherParticipant?.name || "Người dùng";
                                 }
+                                const presence = isPrivate
+                                    ? getPresence(otherParticipant)
+                                    : null;
                                 const muted = isMuted(conv);
                                 const isActive = activeChatId === conv._id;
 
@@ -210,10 +236,44 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                     >
                                         <div className="relative flex-shrink-0">
                                             <Avatar name={convName} size="md" />
+                                            {/* Chấm trạng thái — góc dưới phải, chỉ cho private chat */}
+                                            {isPrivate && presence && (
+                                                <div
+                                                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${statusDotColor[presence.status] || statusDotColor.offline}`}
+                                                    title={
+                                                        presence.status ===
+                                                        "online"
+                                                            ? "Đang hoạt động"
+                                                            : presence.status ===
+                                                                "away"
+                                                              ? "Vắng mặt"
+                                                              : presence.status ===
+                                                                  "busy"
+                                                                ? "Bận"
+                                                                : "Ngoại tuyến"
+                                                    }
+                                                />
+                                            )}
+                                            {/* Bong bóng trạng thái tùy chỉnh — góc trên phải, kiểu Messenger */}
+                                            {isPrivate &&
+                                                presence?.status !==
+                                                    "offline" &&
+                                                presence?.customStatusMessage && (
+                                                    <div
+                                                        className="absolute -top-1.5 -right-1.5 max-w-[70px] px-1.5 py-0.5 bg-white rounded-full shadow-md border border-gray-100 text-[8px] font-medium text-gray-600 truncate leading-tight"
+                                                        title={
+                                                            presence.customStatusMessage
+                                                        }
+                                                    >
+                                                        {
+                                                            presence.customStatusMessage
+                                                        }
+                                                    </div>
+                                                )}
                                             {muted && (
-                                                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-gray-400 rounded-full flex items-center justify-center">
+                                                <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 bg-gray-400 rounded-full flex items-center justify-center border-2 border-white">
                                                     <BellOff
-                                                        size={8}
+                                                        size={7}
                                                         className="text-white"
                                                     />
                                                 </div>
