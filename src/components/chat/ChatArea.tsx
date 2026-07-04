@@ -31,6 +31,7 @@ import { messageService } from "../../services/messageService";
 import { useSocket } from "../../context/SocketContext";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import MessageErrorBoundary from "./MessageErrorBoundary";
+import UserProfileModal from "./UserProfileModal";
 import { conversationService } from "../../services/conversationService";
 import { useAuth } from "../../context/AuthContext";
 import Avatar from "../ui/Avatar";
@@ -204,6 +205,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
     const { user } = useAuth();
     const { presenceMap } = useSocket();
+    const [viewProfileUserId, setViewProfileUserId] = useState<string | null>(
+        null,
+    );
     const [messages, setMessages] = useState<Message[]>([]);
     const [conversationInfo, setConversationInfo] =
         useState<Conversation | null>(null);
@@ -1005,11 +1009,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             {/* Header */}
             <header className="h-16 px-5 bg-white border-b border-gray-100 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
                 <div className="flex items-center gap-3">
-                    <Avatar
-                        src={headerOther?.avatar}
-                        name={headerName || "?"}
-                        size="md"
-                    />
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (isPrivate && headerOther?._id) {
+                                setViewProfileUserId(headerOther._id);
+                            }
+                        }}
+                        className={isPrivate ? "cursor-pointer" : "cursor-default"}
+                    >
+                        <Avatar
+                            src={headerOther?.avatar}
+                            name={headerName || "?"}
+                            size="md"
+                        />
+                    </button>
                     <div>
                         <div className="font-bold text-gray-900 text-[15px]">
                             {headerName || "…"}
@@ -1387,16 +1401,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                     {!isMine && (
                                         <div className="self-end flex-shrink-0 w-7">
                                             {!sameAuthor ? (
-                                                <Avatar
-                                                    src={
-                                                        msg.senderId?.avatar
-                                                    }
-                                                    name={
-                                                        msg.senderId?.name ||
-                                                        "U"
-                                                    }
-                                                    size="sm"
-                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const sid =
+                                                            msg.senderId?._id;
+                                                        if (sid)
+                                                            setViewProfileUserId(
+                                                                sid,
+                                                            );
+                                                    }}
+                                                >
+                                                    <Avatar
+                                                        src={
+                                                            msg.senderId
+                                                                ?.avatar
+                                                        }
+                                                        name={
+                                                            msg.senderId
+                                                                ?.name || "U"
+                                                        }
+                                                        size="sm"
+                                                    />
+                                                </button>
                                             ) : null}
                                         </div>
                                     )}
@@ -2505,6 +2532,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         </button>
                     </div>
                 </div>
+            )}
+
+            {viewProfileUserId && (
+                <UserProfileModal
+                    userId={viewProfileUserId}
+                    onClose={() => setViewProfileUserId(null)}
+                />
             )}
         </div>
     );

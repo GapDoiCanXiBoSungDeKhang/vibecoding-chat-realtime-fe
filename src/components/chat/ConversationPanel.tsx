@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { conversationService } from "../../services/conversationService";
 import Avatar from "../ui/Avatar";
+import UserProfileModal from "./UserProfileModal";
 import toast from "react-hot-toast";
 import AddMemberModal from "./AddMemberModal";
 
@@ -66,6 +67,9 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     const [newAnnouncement, setNewAnnouncement] = useState("");
     const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [viewProfileUserId, setViewProfileUserId] = useState<
+        string | null
+    >(null);
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [isPendingLoading, setIsPendingLoading] = useState(false);
 
@@ -618,10 +622,27 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                                                 key={memberId}
                                                 className="flex items-center gap-2.5 p-2.5 hover:bg-gray-50 rounded-xl group"
                                             >
-                                                <Avatar
-                                                    name={member?.name || "U"}
-                                                    size="sm"
-                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (
+                                                            memberId &&
+                                                            !isSelf
+                                                        )
+                                                            setViewProfileUserId(
+                                                                memberId,
+                                                            );
+                                                    }}
+                                                >
+                                                    <Avatar
+                                                        src={member?.avatar}
+                                                        name={
+                                                            member?.name ||
+                                                            "U"
+                                                        }
+                                                        size="sm"
+                                                    />
+                                                </button>
                                                 <div className="flex-1 overflow-hidden">
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-sm font-semibold text-gray-800 truncate">
@@ -909,6 +930,13 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
                     onSuccess={() => {
                         onRefresh?.();
                     }}
+                />
+            )}
+
+            {viewProfileUserId && (
+                <UserProfileModal
+                    userId={viewProfileUserId}
+                    onClose={() => setViewProfileUserId(null)}
                 />
             )}
         </div>
