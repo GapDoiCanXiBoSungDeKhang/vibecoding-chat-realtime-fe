@@ -594,8 +594,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             setNewMessage("");
             setReplyTo(null);
             setMentionIds(new Set());
-        } catch {
-            toast.error("Không thể gửi");
+        } catch (error: any) {
+            if (error?.response?.status === 403) {
+                toast.error(
+                    "Không thể gửi tin nhắn — bạn hoặc người này đã chặn nhau",
+                );
+            } else {
+                toast.error("Không thể gửi");
+            }
         } finally {
             setIsSending(false);
         }

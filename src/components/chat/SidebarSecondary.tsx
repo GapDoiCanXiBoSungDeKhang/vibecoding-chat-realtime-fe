@@ -405,11 +405,12 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                                 const isPrivate =
                                                     conv.type === "private";
                                                 let convName = conv.name;
+                                                let other: any = null;
                                                 if (
                                                     isPrivate &&
                                                     conv.participants
                                                 ) {
-                                                    const other =
+                                                    other =
                                                         conv.participants.find(
                                                             (p: any) =>
                                                                 (p.userId
@@ -445,21 +446,34 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
                                                     >
                                                         <div className="relative flex-shrink-0">
                                                             <Avatar
+                                                                src={
+                                                                    other?.avatar
+                                                                }
                                                                 name={convName}
                                                                 size="md"
                                                             />
-                                                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-gray-500 rounded-full flex items-center justify-center">
+                                                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-gray-500 rounded-full flex items-center justify-center border-2 border-white">
                                                                 <Archive
                                                                     size={7}
                                                                     className="text-white"
                                                                 />
                                                             </div>
+                                                            {/* Chấm đỏ báo tin nhắn chưa đọc — quan trọng cho conversation
+                                                                từ người lạ tự động lưu trữ, tránh bị bỏ sót hoàn toàn */}
+                                                            {conv.unreadCount >
+                                                                0 && (
+                                                                <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
+                                                            )}
                                                         </div>
                                                         <div className="flex-1 overflow-hidden">
-                                                            <div className="text-sm truncate font-medium text-gray-600">
+                                                            <div
+                                                                className={`text-sm truncate ${conv.unreadCount > 0 ? "font-bold text-gray-800" : "font-medium text-gray-600"}`}
+                                                            >
                                                                 {convName}
                                                             </div>
-                                                            <div className="text-[11px] truncate text-gray-400">
+                                                            <div
+                                                                className={`text-[11px] truncate ${conv.unreadCount > 0 ? "text-gray-600 font-medium" : "text-gray-400"}`}
+                                                            >
                                                                 {conv
                                                                     .lastMessage
                                                                     ?.content ||

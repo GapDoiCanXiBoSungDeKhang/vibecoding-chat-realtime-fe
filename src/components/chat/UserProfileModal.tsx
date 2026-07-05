@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, MessageSquare, Ban, ShieldCheck, Loader2, Phone, Mail } from "lucide-react";
+import { X, MessageSquare, Ban, ShieldCheck, Loader2, Phone, Mail, Calendar, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { userService } from "../../services/userService";
 import { conversationService } from "../../services/conversationService";
@@ -23,6 +23,28 @@ const statusDotColor: Record<string, string> = {
     away: "bg-yellow-500",
     busy: "bg-red-500",
     offline: "bg-gray-300",
+};
+
+// Format "lần cuối truy cập" kiểu tương đối (vd: "5 phút trước")
+const formatLastSeen = (dateStr: string | null | undefined): string | null => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "Vừa xong";
+    if (diffMin < 60) return `${diffMin} phút trước`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} giờ trước`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 30) return `${diffDay} ngày trước`;
+    return date.toLocaleDateString("vi-VN");
+};
+
+// Format ngày tham gia (vd: "Tháng 3, 2026")
+const formatJoinedDate = (dateStr: string | null | undefined): string | null => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("vi-VN", { month: "long", year: "numeric" });
 };
 
 const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) => {
@@ -164,6 +186,30 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) 
                                 <p className="mt-2 text-sm text-gray-600 italic bg-gray-50 px-3 py-1.5 rounded-xl">
                                     "{profile.customStatusMessage}"
                                 </p>
+                            )}
+
+                            {/* Lần cuối truy cập — chỉ hiện khi BE trả về (đã qua check privacy) */}
+                            {profile.status !== "online" &&
+                                formatLastSeen(profile.lastSeen) && (
+                                    <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
+                                        <Clock size={12} />
+                                        Truy cập {formatLastSeen(profile.lastSeen)}
+                                    </div>
+                                )}
+
+                            {/* Giới thiệu bản thân */}
+                            {profile.bio && (
+                                <p className="mt-3 text-sm text-gray-700 leading-relaxed px-2">
+                                    {profile.bio}
+                                </p>
+                            )}
+
+                            {/* Ngày tham gia */}
+                            {formatJoinedDate(profile.createdAt) && (
+                                <div className="flex items-center gap-1.5 mt-3 text-xs text-gray-400">
+                                    <Calendar size={12} />
+                                    Tham gia {formatJoinedDate(profile.createdAt)}
+                                </div>
                             )}
 
                             {/* Info bổ sung — chỉ hiện nếu BE trả về (tùy quyền riêng tư) */}

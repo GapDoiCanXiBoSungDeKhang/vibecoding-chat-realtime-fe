@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Phone, User, Loader2, Send } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Phone, User, Loader2, Send, MessageSquare } from 'lucide-react';
 import { friendService } from '../../services/friendService';
+import { conversationService } from '../../services/conversationService';
+import { useSocket } from '../../context/SocketContext';
 import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
 import Avatar from '../ui/Avatar';
@@ -10,11 +13,14 @@ interface AddFriendModalProps {
 }
 
 const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
+  const navigate = useNavigate();
+  const { presenceMap } = useSocket();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'name' | 'phone'>('name');
   const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSending, setIsSending] = useState<string | null>(null);
+  const [isChatStarting, setIsChatStarting] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -55,6 +61,22 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
       toast.error(error.response?.data?.message || 'Gửi lời mời thất bại');
     } finally {
       setIsSending(null);
+    }
+  };
+
+  // Nhắn tin trực tiếp KHÔNG cần kết bạn trước — privacy logic đã tự phân
+  // biệt bạn bè/người lạ ở tầng khác, conversation với người lạ sẽ tự vào
+  // mục Lưu trữ phía người nhận (xử lý ở BE conversation.service.ts)
+  const handleStartChat = async (userId: string) => {
+    setIsChatStarting(userId);
+    try {
+      const conv = await conversationService.createPrivateConversation(userId);
+      onClose();
+      navigate('/chat/' + conv._id);
+    } catch {
+      toast.error('Không thể bắt đầu trò chuyện');
+    } finally {
+      setIsChatStarting(null);
     }
   };
 
@@ -101,25 +123,63 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
                 </div>
               )}
               
-              {results.map((user) => (
-                <div 
-                  key={user._id} 
-                  className="flex items-center p-4 hover:bg-white transition-all group"
-                >
-                  <Avatar name={user.name} size="lg" className="mr-4" />
-                  <div className="flex-1">
-                    <div className="font-bold text-gray-800">{user.name}</div>
-                    <div className="text-xs text-gray-500">{user.email || user.phoneNumber}</div>
-                  </div>
-                  <button 
-                    onClick={() => sendRequest(user._id)}
-                    disabled={isSending === user._id}
-                    className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl shadow-md hover:shadow-blue-200 transition-all disabled:opacity-50"
+              {results.map((user) => {
+                const presence = presenceMap[user._id] ?? {
+                  status: user.status ?? 'offline',
+                  customStatusMessage: user.customStatusMessage ?? null,
+                };
+                const statusDotColor: Record<string, string> = {
+                  online: 'bg-green-500',
+                  away: 'bg-yellow-500',
+                  busy: 'bg-red-500',
+                  offline: 'bg-gray-300',
+                };
+                return (
+                  <div
+                    key={user._id}
+                    className="flex items-center p-4 hover:bg-white transition-all group"
                   >
-                    {isSending === user._id ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                  </button>
-                </div>
-              ))}
+                    <div className="relative mr-4 flex-shrink-0">
+                      <Avatar src={user.avatar} name={user.name} size="lg" />
+                      <span
+                        className={`absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-white ${statusDotColor[presence.status] || statusDotColor.offline}`}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-gray-800 truncate">{user.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{user.email || user.phoneNumber}</div>
+                      {presence.customStatusMessage && (
+                        <div className="text-[11px] text-gray-400 italic truncate mt-0.5">
+                          "{presence.customStatusMessage}"
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Nhắn tin thẳng — không cần kết bạn trước */}
+                      <button
+                        onClick={() => handleStartChat(user._id)}
+                        disabled={isChatStarting === user._id}
+                        title="Nhắn tin"
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2.5 rounded-xl transition-all disabled:opacity-50"
+                      >
+                        {isChatStarting === user._id ? (
+                          <Loader2 className="animate-spin" size={18} />
+                        ) : (
+                          <MessageSquare size={18} />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => sendRequest(user._id)}
+                        disabled={isSending === user._id}
+                        title="Gửi lời mời kết bạn"
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl shadow-md hover:shadow-blue-200 transition-all disabled:opacity-50"
+                      >
+                        {isSending === user._id ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

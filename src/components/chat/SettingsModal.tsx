@@ -37,6 +37,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
+    const [bio, setBio] = useState("");
     const [avatar, setAvatar] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
 
@@ -77,6 +78,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             setName(data.name || "");
             setEmail(data.email || "");
             setPhone(data.phoneNumber || "");
+            setBio(data.bio || "");
             setPreview(data.avatar || null);
 
             // Status — lấy trực tiếp từ profile response (không cần API riêng)
@@ -189,6 +191,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             formData.append("name", name);
             formData.append("email", email);
             formData.append("phone", phone);
+            formData.append("bio", bio);
             if (avatar) {
                 formData.append("file", avatar);
             }
@@ -389,6 +392,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                                                         className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                                                     />
                                                 </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-sm font-semibold text-gray-700 ml-1">
+                                                        Giới thiệu bản thân
+                                                    </label>
+                                                    <span className="text-xs text-gray-400">
+                                                        {bio.length}/150
+                                                    </span>
+                                                </div>
+                                                <textarea
+                                                    value={bio}
+                                                    maxLength={150}
+                                                    rows={3}
+                                                    placeholder="Vài dòng giới thiệu về bạn..."
+                                                    onChange={(e) =>
+                                                        setBio(e.target.value)
+                                                    }
+                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all resize-none text-sm"
+                                                />
                                             </div>
                                         </div>
                                     </div>
