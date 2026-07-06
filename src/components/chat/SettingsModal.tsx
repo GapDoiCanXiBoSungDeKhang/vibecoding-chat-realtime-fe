@@ -87,13 +87,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
             // Privacy — dùng endpoint riêng để đảm bảo dữ liệu chuẩn nhất
             try {
-                const privacy = await userService.getPrivacy();
+                // BE trả về {_id, privacy: {lastSeenVisibility, ...}} — CÓ 1 TẦNG
+                // NESTING, không phải object phẳng. Đây là bug khiến settings
+                // luôn hiện lại mặc định dù đã lưu đúng vào DB.
+                const res = await userService.getPrivacy();
+                const p = res?.privacy;
                 setLastSeenVisibility(
-                    privacy?.lastSeenVisibility || "everyone",
+                    p?.lastSeenVisibility || "everyone",
                 );
-                setShowReadReceipts(privacy?.showReadReceipts ?? true);
+                setShowReadReceipts(p?.showReadReceipts ?? true);
                 setShowTypingIndicator(
-                    privacy?.showTypingIndicator ?? true,
+                    p?.showTypingIndicator ?? true,
                 );
             } catch {
                 // Fallback: nếu endpoint riêng lỗi, dùng privacy nested trong profile

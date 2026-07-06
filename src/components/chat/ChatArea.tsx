@@ -73,6 +73,22 @@ const formatCallDuration = (seconds: number): string => {
     return `${m}:${s}`;
 };
 
+// Format "hoạt động lần cuối" kiểu tương đối — dùng cho header ChatArea khi
+// người đang chat đã offline (tôn trọng privacy đã check ở BE/presenceMap)
+const formatLastSeen = (dateStr: string | null | undefined): string | null => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "Vừa mới truy cập";
+    if (diffMin < 60) return `Hoạt động ${diffMin} phút trước`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `Hoạt động ${diffHour} giờ trước`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 30) return `Hoạt động ${diffDay} ngày trước`;
+    return `Hoạt động lúc ${date.toLocaleDateString("vi-VN")}`;
+};
+
 const renderCallMessage = (
     msg: any,
     isMine: boolean,
@@ -1055,6 +1071,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                                             "Bận"}
                                     </span>
                                 ) : (
+                                    formatLastSeen(otherPresence?.lastSeen) ||
                                     "Ngoại tuyến"
                                 )
                             ) : (
