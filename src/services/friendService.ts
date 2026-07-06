@@ -35,4 +35,9 @@ export const friendService = {
     const response = await api.get(`/friends/find/phone?q=${phone}`);
     return response.data;
   },
+
+  async getFriendStatus(userId: string) {
+    const response = await api.get(`/friends/status/${userId}`);
+    return response.data;
+  },
 };

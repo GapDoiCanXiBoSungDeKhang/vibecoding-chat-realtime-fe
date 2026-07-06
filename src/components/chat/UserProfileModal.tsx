@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { X, MessageSquare, Ban, ShieldCheck, Loader2, Phone, Mail, Calendar, Clock } from "lucide-react";
+import { X, MessageSquare, Ban, ShieldCheck, Loader2, Phone, Mail, Calendar, Clock, UserPlus, Check, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { userService } from "../../services/userService";
 import { conversationService } from "../../services/conversationService";
+import { friendService } from "../../services/friendService";
+import { useAuth } from "../../context/AuthContext";
 import Avatar from "../ui/Avatar";
 import toast from "react-hot-toast";
 
@@ -49,11 +51,18 @@ const formatJoinedDate = (dateStr: string | null | undefined): string | null => 
 
 const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) => {
     const navigate = useNavigate();
+    const { user: currentUser } = useAuth();
+    const isSelf = currentUser?.sub === userId;
     const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isBlocked, setIsBlocked] = useState(false);
     const [isBlockLoading, setIsBlockLoading] = useState(false);
     const [isStartingChat, setIsStartingChat] = useState(false);
+    const [friendStatus, setFriendStatus] = useState<{
+        status: "none" | "friends" | "request_sent" | "request_received";
+        requestId?: string;
+    } | null>(null);
+    const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -61,16 +70,22 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) 
         const load = async () => {
             setIsLoading(true);
             try {
-                const [profileData, blockedList] = await Promise.all([
+                const [profileData, blockedList, friendStatusData] = await Promise.all([
                     userService.getCurrentProfile(userId),
-                    userService.getBlockedUsers().catch(() => []),
+                    isSelf ? Promise.resolve([]) : userService.getBlockedUsers().catch(() => []),
+                    isSelf ? Promise.resolve(null) : friendService.getFriendStatus(userId).catch(() => null),
                 ]);
                 if (cancelled) return;
                 setProfile(profileData);
+                // BE trả về mảng BlockedUser records: {blockedId: {populated user}}
+                // KHÔNG phải mảng user trực tiếp — field đúng là blockedId, không
+                // phải userId hay _id (đó là _id của record chặn, không liên quan)
                 const blockedIds = (blockedList || []).map(
-                    (u: any) => u._id || u.userId?._id || u.userId,
+                    (record: any) =>
+                        record.blockedId?._id || record.blockedId,
                 );
                 setIsBlocked(blockedIds.includes(userId));
+                setFriendStatus(friendStatusData);
             } catch {
                 if (!cancelled) toast.error("Không thể tải thông tin người dùng");
             } finally {
@@ -82,7 +97,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) 
         return () => {
             cancelled = true;
         };
-    }, [userId]);
+    }, [userId, isSelf]);
 
     const handleStartChat = async () => {
         setIsStartingChat(true);
@@ -94,6 +109,32 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) 
             toast.error("Không thể bắt đầu trò chuyện");
         } finally {
             setIsStartingChat(false);
+        }
+    };
+
+    const handleFriendAction = async () => {
+        if (!friendStatus) return;
+        setIsFriendActionLoading(true);
+        try {
+            if (friendStatus.status === "none") {
+                await friendService.sendFriendRequest(userId, "Hi, let's be friends!");
+                setFriendStatus({ status: "request_sent" });
+                toast.success("Đã gửi lời mời kết bạn");
+            } else if (
+                friendStatus.status === "request_received" &&
+                friendStatus.requestId
+            ) {
+                await friendService.respondToRequest(
+                    friendStatus.requestId,
+                    "accepted",
+                );
+                setFriendStatus({ status: "friends" });
+                toast.success("Đã chấp nhận lời mời kết bạn");
+            }
+        } catch {
+            toast.error("Thao tác thất bại");
+        } finally {
+            setIsFriendActionLoading(false);
         }
     };
 
@@ -230,39 +271,79 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ userId, onClose }) 
                                 </div>
                             )}
 
-                            {/* Actions */}
-                            <div className="w-full mt-5 flex gap-2">
-                                <button
-                                    onClick={handleStartChat}
-                                    disabled={isStartingChat}
-                                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-xl transition-colors text-sm"
-                                >
-                                    {isStartingChat ? (
-                                        <Loader2 size={15} className="animate-spin" />
-                                    ) : (
-                                        <MessageSquare size={15} />
+                            {/* Actions — ẩn hoàn toàn nếu đang xem chính mình */}
+                            {!isSelf && (
+                                <div className="w-full mt-5 space-y-2">
+                                    {/* Nút kết bạn — chỉ hiện khi CHƯA là bạn bè */}
+                                    {friendStatus?.status === "none" && (
+                                        <button
+                                            onClick={handleFriendAction}
+                                            disabled={isFriendActionLoading}
+                                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-60 text-blue-600 font-bold rounded-xl transition-colors text-sm"
+                                        >
+                                            {isFriendActionLoading ? (
+                                                <Loader2 size={15} className="animate-spin" />
+                                            ) : (
+                                                <UserPlus size={15} />
+                                            )}
+                                            Kết bạn
+                                        </button>
                                     )}
-                                    Nhắn tin
-                                </button>
-                                <button
-                                    onClick={handleToggleBlock}
-                                    disabled={isBlockLoading}
-                                    className={`flex items-center justify-center gap-2 py-2.5 px-4 font-bold rounded-xl transition-colors text-sm ${
-                                        isBlocked
-                                            ? "bg-green-50 text-green-600 hover:bg-green-100"
-                                            : "bg-red-50 text-red-600 hover:bg-red-100"
-                                    }`}
-                                    title={isBlocked ? "Bỏ chặn" : "Chặn"}
-                                >
-                                    {isBlockLoading ? (
-                                        <Loader2 size={15} className="animate-spin" />
-                                    ) : isBlocked ? (
-                                        <ShieldCheck size={15} />
-                                    ) : (
-                                        <Ban size={15} />
+                                    {friendStatus?.status === "request_sent" && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 text-gray-400 font-bold rounded-xl text-sm">
+                                            <Users size={15} />
+                                            Đã gửi lời mời kết bạn
+                                        </div>
                                     )}
-                                </button>
-                            </div>
+                                    {friendStatus?.status === "request_received" && (
+                                        <button
+                                            onClick={handleFriendAction}
+                                            disabled={isFriendActionLoading}
+                                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-50 hover:bg-green-100 disabled:opacity-60 text-green-600 font-bold rounded-xl transition-colors text-sm"
+                                        >
+                                            {isFriendActionLoading ? (
+                                                <Loader2 size={15} className="animate-spin" />
+                                            ) : (
+                                                <Check size={15} />
+                                            )}
+                                            Chấp nhận lời mời kết bạn
+                                        </button>
+                                    )}
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleStartChat}
+                                            disabled={isStartingChat}
+                                            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-xl transition-colors text-sm"
+                                        >
+                                            {isStartingChat ? (
+                                                <Loader2 size={15} className="animate-spin" />
+                                            ) : (
+                                                <MessageSquare size={15} />
+                                            )}
+                                            Nhắn tin
+                                        </button>
+                                        <button
+                                            onClick={handleToggleBlock}
+                                            disabled={isBlockLoading}
+                                            className={`flex items-center justify-center gap-2 py-2.5 px-4 font-bold rounded-xl transition-colors text-sm ${
+                                                isBlocked
+                                                    ? "bg-green-50 text-green-600 hover:bg-green-100"
+                                                    : "bg-red-50 text-red-600 hover:bg-red-100"
+                                            }`}
+                                            title={isBlocked ? "Bỏ chặn" : "Chặn"}
+                                        >
+                                            {isBlockLoading ? (
+                                                <Loader2 size={15} className="animate-spin" />
+                                            ) : isBlocked ? (
+                                                <ShieldCheck size={15} />
+                                            ) : (
+                                                <Ban size={15} />
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </>
                 )}

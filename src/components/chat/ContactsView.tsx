@@ -12,8 +12,11 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AddFriendModal from "./AddFriendModal";
+import UserProfileModal from "./UserProfileModal";
+import Avatar from "../ui/Avatar";
 import { friendService } from "../../services/friendService";
 import { useFriendSocket } from "../../hooks/useFriendSocket";
+import { useSocket } from "../../context/SocketContext";
 
 interface ContactsViewProps {
     onStartChat?: (userId: string) => void;
@@ -24,6 +27,10 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
     const [requests, setRequests] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [viewProfileUserId, setViewProfileUserId] = useState<
+        string | null
+    >(null);
+    const { presenceMap } = useSocket();
     const [searchTerm, setSearchTerm] = useState("");
 
     const fetchData = async () => {
@@ -103,6 +110,13 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
         <div className="flex-1 flex flex-col bg-white h-full overflow-hidden font-sans">
             {isAddModalOpen && (
                 <AddFriendModal onClose={() => setIsAddModalOpen(false)} />
+            )}
+
+            {viewProfileUserId && (
+                <UserProfileModal
+                    userId={viewProfileUserId}
+                    onClose={() => setViewProfileUserId(null)}
+                />
             )}
 
             {/* Header - Zalo Style */}
@@ -244,11 +258,53 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
                                                                 )
                                                             }
                                                         >
-                                                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 flex items-center justify-center font-bold text-base shadow-sm group-hover:scale-105 transition-transform">
-                                                                {friend.name?.charAt(
-                                                                    0,
-                                                                )}
-                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setViewProfileUserId(
+                                                                        friend._id,
+                                                                    );
+                                                                }}
+                                                                className="relative flex-shrink-0"
+                                                            >
+                                                                <Avatar
+                                                                    src={
+                                                                        friend.avatar
+                                                                    }
+                                                                    name={
+                                                                        friend.name
+                                                                    }
+                                                                    size="md"
+                                                                    className="group-hover:scale-105 transition-transform"
+                                                                />
+                                                                <span
+                                                                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                                                                        presenceMap[
+                                                                            friend
+                                                                                ._id
+                                                                        ]
+                                                                            ?.status ===
+                                                                        "online"
+                                                                            ? "bg-green-500"
+                                                                            : presenceMap[
+                                                                                    friend
+                                                                                        ._id
+                                                                                ]
+                                                                                    ?.status ===
+                                                                                "away"
+                                                                              ? "bg-yellow-500"
+                                                                              : presenceMap[
+                                                                                      friend
+                                                                                          ._id
+                                                                                  ]
+                                                                                      ?.status ===
+                                                                                  "busy"
+                                                                                ? "bg-red-500"
+                                                                                : "bg-gray-300"
+                                                                    }`}
+                                                                />
+                                                            </button>
                                                             <div>
                                                                 <div className="font-bold text-[14px] text-gray-800">
                                                                     {

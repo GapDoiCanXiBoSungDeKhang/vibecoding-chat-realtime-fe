@@ -7,6 +7,7 @@ import { useSocket } from '../../context/SocketContext';
 import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
 import Avatar from '../ui/Avatar';
+import UserProfileModal from './UserProfileModal';
 
 interface AddFriendModalProps {
   onClose: () => void;
@@ -21,6 +22,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [isChatStarting, setIsChatStarting] = useState<string | null>(null);
+  const [viewProfileUserId, setViewProfileUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -81,6 +83,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
   };
 
   return (
+    <>
     <Modal isOpen={true} onClose={onClose} title="Thêm bạn" maxWidth="max-w-[420px]">
       <div className="p-6">
         <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl">
@@ -140,7 +143,12 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
                     className="flex items-center p-4 hover:bg-white transition-all group"
                   >
                     <div className="relative mr-4 flex-shrink-0">
-                      <Avatar src={user.avatar} name={user.name} size="lg" />
+                      <button
+                        type="button"
+                        onClick={() => setViewProfileUserId(user._id)}
+                      >
+                        <Avatar src={user.avatar} name={user.name} size="lg" />
+                      </button>
                       <span
                         className={`absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-white ${statusDotColor[presence.status] || statusDotColor.offline}`}
                       />
@@ -185,6 +193,14 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ onClose }) => {
         )}
       </div>
     </Modal>
+
+    {viewProfileUserId && (
+        <UserProfileModal
+            userId={viewProfileUserId}
+            onClose={() => setViewProfileUserId(null)}
+        />
+    )}
+    </>
   );
 };
 
