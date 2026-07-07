@@ -153,7 +153,7 @@ const SidebarSecondary: React.FC<SidebarSecondaryProps> = ({
     });
 
     return (
-        <aside className="w-72 h-full bg-[#f7f7f7] border-r border-gray-200 flex flex-col flex-shrink-0 relative">
+        <aside className="w-full md:w-72 h-full bg-[#f7f7f7] border-r border-gray-200 flex flex-col min-w-0 relative">
             {/* Search Header */}
             <div className="p-3 flex gap-2">
                 <div className="flex-1 relative group">

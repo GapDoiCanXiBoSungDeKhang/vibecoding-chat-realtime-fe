@@ -302,7 +302,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     ];
 
     return (
-        <div className="w-80 h-full bg-white border-l border-gray-100 flex flex-col shadow-lg flex-shrink-0 animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-40 md:static md:inset-auto md:z-auto w-full md:w-80 h-full bg-white border-l border-gray-100 flex flex-col shadow-lg flex-shrink-0 animate-in slide-in-from-right duration-300">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <span className="font-bold text-sm text-gray-800">

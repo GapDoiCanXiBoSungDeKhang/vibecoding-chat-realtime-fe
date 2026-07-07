@@ -1031,6 +1031,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             {/* Header */}
             <header className="h-16 px-5 bg-white border-b border-gray-100 flex items-center justify-between flex-shrink-0 shadow-sm z-10">
                 <div className="flex items-center gap-3">
+                    {/* Nút quay lại — chỉ hiện trên mobile, desktop luôn thấy
+                        cả list bên trái nên không cần nút này */}
+                    <button
+                        type="button"
+                        onClick={() => onClose?.()}
+                        className="md:hidden -ml-1 p-1.5 rounded-full hover:bg-gray-100 text-gray-600 flex-shrink-0"
+                    >
+                        <ChevronLeft size={22} />
+                    </button>
                     <button
                         type="button"
                         onClick={() => {

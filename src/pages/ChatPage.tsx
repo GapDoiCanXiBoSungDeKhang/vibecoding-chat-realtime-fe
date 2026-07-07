@@ -35,6 +35,9 @@ const ChatPage: React.FC = () => {
         ? "contacts"
         : "chats";
     const activeChat = chatId || null;
+    // Trên mobile: coi /friends cũng là "trang chi tiết" giống 1 cuộc trò
+    // chuyện — ẩn list bên trái, chỉ hiện ContactsView full màn hình
+    const showDetail = !!activeChat || location.pathname.startsWith("/friends");
 
     const [prevActiveChat, setPrevActiveChat] = useState<string | null>(null);
     const [unreadMentions, setUnreadMentions] = useState<Set<string>>(new Set());
@@ -322,6 +325,7 @@ const ChatPage: React.FC = () => {
     return (
         <>
         <ChatLayout
+            showDetail={showDetail}
             primarySidebar={
                 <SidebarPrimary
                     user={user}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     UserPlus,
     Check,
@@ -9,6 +10,7 @@ import {
     MoreHorizontal,
     Users,
     MessageSquare,
+    ChevronLeft,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import AddFriendModal from "./AddFriendModal";
@@ -23,6 +25,7 @@ interface ContactsViewProps {
 }
 
 const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
+    const navigate = useNavigate();
     const [friends, setFriends] = useState<any[]>([]);
     const [requests, setRequests] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -120,8 +123,15 @@ const ContactsView: React.FC<ContactsViewProps> = ({ onStartChat }) => {
             )}
 
             {/* Header - Zalo Style */}
-            <header className="h-14 border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
+            <header className="h-14 border-b border-gray-100 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
                 <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => navigate("/chat")}
+                        className="md:hidden -ml-1 p-1.5 rounded-full hover:bg-gray-100 text-gray-600"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
                     <Users size={20} className="text-gray-600" />
                     <h2 className="text-base font-bold text-gray-800">
                         Danh sách bạn bè
