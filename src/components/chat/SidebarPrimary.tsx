@@ -31,10 +31,15 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
     pendingFriendCount = 0,
 }) => {
     return (
-        <aside className="w-[58px] h-full bg-[#0068ff] flex flex-col items-center py-4 flex-shrink-0 z-50 shadow-xl">
-            {/* User Profile */}
-            <div
-                className="cursor-pointer mb-6 hover:scale-105 transition-all shadow-lg group relative"
+        <aside
+            className="fixed bottom-0 left-0 right-0 z-50 h-14 flex-row justify-around
+                       md:static md:h-full md:w-[58px] md:flex-col md:justify-start md:py-4
+                       bg-[#0068ff] flex items-center flex-shrink-0 shadow-xl"
+        >
+            {/* User Profile — trên mobile là 1 nav item ngang hàng, desktop nằm trên cùng */}
+            <button
+                type="button"
+                className="cursor-pointer md:mb-6 group relative flex flex-col items-center justify-center flex-1 md:flex-none h-full md:h-auto"
                 onClick={onOpenSettings}
                 title="Cài đặt tài khoản"
             >
@@ -44,33 +49,31 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
                     size="md"
                     className="border-2 border-white/30"
                 />
-                <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/10 transition-colors" />
-            </div>
-
+            </button>
 
             {/* Navigation */}
-            <div className="flex flex-col gap-1 w-full">
+            <div className="flex flex-row md:flex-col gap-1 flex-1 md:flex-none md:w-full">
                 <button
                     onClick={() => setCurrentView("chats")}
-                    className={`w-full py-3 flex justify-center transition-all relative group ${currentView === "chats" ? "bg-[#005ae0] text-white" : "text-white/70 hover:bg-white/10"}`}
+                    className={`flex-1 md:w-full py-2 md:py-3 flex flex-col md:flex-row items-center justify-center gap-0.5 transition-all relative group ${currentView === "chats" ? "bg-[#005ae0] text-white" : "text-white/70 hover:bg-white/10"}`}
                 >
                     <MessageSquare
-                        size={22}
+                        size={20}
                         className="group-hover:scale-110 transition-transform"
                     />
                     {currentView === "chats" && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
+                        <div className="absolute left-0 right-0 md:right-auto top-0 md:top-0 bottom-auto md:bottom-0 h-1 md:h-auto md:w-1 bg-white" />
                     )}
                 </button>
 
                 {/* Contacts button với badge */}
                 <button
                     onClick={() => setCurrentView("contacts")}
-                    className={`w-full py-3 flex justify-center transition-all relative group ${currentView === "contacts" ? "bg-[#005ae0] text-white" : "text-white/70 hover:bg-white/10"}`}
+                    className={`flex-1 md:w-full py-2 md:py-3 flex flex-col md:flex-row items-center justify-center gap-0.5 transition-all relative group ${currentView === "contacts" ? "bg-[#005ae0] text-white" : "text-white/70 hover:bg-white/10"}`}
                 >
                     <div className="relative">
                         <Users
-                            size={22}
+                            size={20}
                             className="group-hover:scale-110 transition-transform"
                         />
                         {pendingFriendCount > 0 && (
@@ -80,13 +83,14 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
                         )}
                     </div>
                     {currentView === "contacts" && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white" />
+                        <div className="absolute left-0 right-0 md:right-auto top-0 md:top-0 bottom-auto md:bottom-0 h-1 md:h-auto md:w-1 bg-white" />
                     )}
                 </button>
             </div>
 
-            {/* Utilities & Bottom Actions */}
-            <div className="mt-auto flex flex-col items-center gap-1 w-full pb-2">
+            {/* Utilities — Cloud/Briefcase chưa gắn chức năng, ẩn trên mobile
+                để tiết kiệm chỗ trong thanh bottom nav, vẫn giữ trên desktop */}
+            <div className="hidden md:flex md:mt-auto md:flex-col items-center gap-1 w-full pb-2">
                 <button className="w-full py-3 flex justify-center text-white/70 hover:bg-white/10 transition-all group">
                     <Cloud
                         size={20}
@@ -117,6 +121,15 @@ const SidebarPrimary: React.FC<SidebarPrimaryProps> = ({
                     <LogOut size={20} />
                 </button>
             </div>
+
+            {/* Logout — mobile chỉ hiện 1 icon gọn trong bottom nav (Settings/Cloud/
+                Briefcase gộp vào nút avatar ở trên để tiết kiệm không gian) */}
+            <button
+                onClick={onLogout}
+                className="md:hidden flex-1 py-2 flex flex-col items-center justify-center gap-0.5 text-white/70 active:bg-red-500/30 transition-all"
+            >
+                <LogOut size={20} />
+            </button>
         </aside>
     );
 };

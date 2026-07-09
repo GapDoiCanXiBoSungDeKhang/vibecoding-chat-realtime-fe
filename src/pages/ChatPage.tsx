@@ -115,36 +115,6 @@ const ChatPage: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.sub]);
 
-    // Restore pending group request badges sau khi refresh
-    // Fetch pending count cho tất cả group conversations
-    useEffect(() => {
-        const restorePendingGroupBadges = async () => {
-            try {
-                const convs = await conversationService.getConversations();
-                const groups = (convs || []).filter((c: any) => c.type === "group");
-                const counts: Record<string, number> = {};
-                await Promise.all(
-                    groups.map(async (g: any) => {
-                        try {
-                            const requests = await conversationService.listJoinRequests(g._id);
-                            if (requests?.length > 0) {
-                                counts[g._id] = requests.length;
-                            }
-                        } catch {
-                            // Bỏ qua nếu lỗi (không đủ quyền hoặc network)
-                        }
-                    })
-                );
-                if (Object.keys(counts).length > 0) {
-                    setPendingGroupRequests(counts);
-                }
-            } catch {
-                // Bỏ qua
-            }
-        };
-        restorePendingGroupBadges();
-    }, []);
-
     // Reset badge khi user vào tab contacts
     useEffect(() => {
         if (currentView === "contacts") {
@@ -156,15 +126,43 @@ const ChatPage: React.FC = () => {
         try {
             const data = await conversationService.getConversations();
             setConversations(data);
+            return data;
         } catch {
             toast.error("Không thể tải danh sách trò chuyện");
+            return [];
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchConversations();
+        const init = async () => {
+            // Gộp 2 lần gọi getConversations() thành 1 — trước đây
+            // fetchConversations() và restorePendingGroupBadges() mỗi cái gọi
+            // riêng lúc mount, bắn gần như đồng thời + Promise.all song song
+            // listJoinRequests cho từng group → dễ vượt rate limit (429 storm)
+            // ngay lúc khởi động app, gây đứng/lag đặc biệt rõ trên mobile
+            const data = await fetchConversations();
+            const groups = (data || []).filter((c: any) => c.type === "group");
+            if (groups.length === 0) return;
+
+            const counts: Record<string, number> = {};
+            // Chạy tuần tự thay vì Promise.all để tránh burst request cùng lúc
+            for (const g of groups) {
+                try {
+                    const requests = await conversationService.listJoinRequests(g._id);
+                    if (requests?.length > 0) {
+                        counts[g._id] = requests.length;
+                    }
+                } catch {
+                    // Bỏ qua nếu lỗi (không đủ quyền hoặc network)
+                }
+            }
+            if (Object.keys(counts).length > 0) {
+                setPendingGroupRequests(counts);
+            }
+        };
+        init();
     }, []);
 
     const { isConnected } = useSocket();

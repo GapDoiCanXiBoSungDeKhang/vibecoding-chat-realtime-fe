@@ -1987,6 +1987,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 >
                     <button
                         onClick={() => {
+                            setEmojiPickerMsg(contextMenu.msg._id);
+                            setContextMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                        <Smile size={14} /> Cảm xúc
+                    </button>
+                    <button
+                        onClick={() => {
                             setReplyTo(contextMenu.msg);
                             setContextMenu(null);
                         }}

@@ -211,28 +211,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[100] p-4 animate-in fade-in duration-300">
-            <div className="bg-white w-full max-w-3xl h-[70vh] rounded-2xl shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300">
-                {/* Sidebar */}
-                <div className="w-56 bg-gray-50 border-r border-gray-100 p-6 flex flex-col gap-2">
-                    <h2 className="text-lg font-black mb-6 text-gray-900 px-2">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[100] p-0 md:p-4 animate-in fade-in duration-300">
+            <div className="bg-white w-full h-full md:h-[70vh] md:max-w-3xl md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-300">
+                {/* Sidebar — thanh tab ngang cuộn được trên mobile, cột dọc cố định trên desktop */}
+                <div className="w-full md:w-56 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 p-3 md:p-6 flex flex-row md:flex-col gap-2 flex-shrink-0 overflow-x-auto md:overflow-visible">
+                    <h2 className="hidden md:block text-lg font-black mb-6 text-gray-900 px-2">
                         Cài đặt
                     </h2>
 
-                    <nav className="space-y-1">
+                    <nav className="flex flex-row md:flex-col gap-1.5 md:gap-1 md:space-y-1">
                         <button
                             onClick={() => setActiveTab("profile")}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${activeTab === "profile" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
+                            className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3.5 md:px-4 py-2 md:py-2.5 rounded-xl transition-all duration-200 text-xs md:text-sm whitespace-nowrap ${activeTab === "profile" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
                         >
-                            <User size={18} />{" "}
+                            <User size={16} />{" "}
                             <span className="font-bold">Thông tin cá nhân</span>
                         </button>
 
                         <button
                             onClick={() => setActiveTab("account")}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${activeTab === "account" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
+                            className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3.5 md:px-4 py-2 md:py-2.5 rounded-xl transition-all duration-200 text-xs md:text-sm whitespace-nowrap ${activeTab === "account" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
                         >
-                            <Shield size={18} />{" "}
+                            <Shield size={16} />{" "}
                             <span className="font-bold">
                                 Tài khoản & Bảo mật
                             </span>
@@ -240,14 +240,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
                         <button
                             onClick={() => setActiveTab("preferences")}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm ${activeTab === "preferences" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
+                            className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3.5 md:px-4 py-2 md:py-2.5 rounded-xl transition-all duration-200 text-xs md:text-sm whitespace-nowrap ${activeTab === "preferences" ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "text-gray-600 hover:bg-gray-200/60"}`}
                         >
-                            <Settings size={18} />{" "}
+                            <Settings size={16} />{" "}
                             <span className="font-bold">Cài đặt chung</span>
                         </button>
                     </nav>
 
-                    <div className="mt-auto pt-6 border-t border-gray-200/60 px-2">
+                    <div className="hidden md:block mt-auto pt-6 border-t border-gray-200/60 px-2">
                         <div className="flex items-center gap-2 text-gray-400">
                             <Lock size={14} />
                             <span className="text-[9px] font-black uppercase tracking-widest">
@@ -258,15 +258,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 flex flex-col relative bg-white overflow-hidden">
+                <div className="flex-1 flex flex-col relative bg-white overflow-hidden min-h-0">
                     <button
                         onClick={onClose}
-                        className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 transition-colors z-20 p-1.5 hover:bg-gray-100 rounded-full"
+                        className="absolute top-4 md:top-6 right-4 md:right-6 text-gray-400 hover:text-gray-900 transition-colors z-20 p-1.5 hover:bg-gray-100 rounded-full"
                     >
                         <X size={24} />
                     </button>
 
-                    <div className="flex-1 overflow-y-auto p-8 lg:p-10">
+                    <div className="flex-1 overflow-y-auto p-5 md:p-8 lg:p-10">
                         {isLoading ? (
                             <div className="h-full flex items-center justify-center">
                                 <Loader2
