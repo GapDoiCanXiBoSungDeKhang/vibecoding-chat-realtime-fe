@@ -368,35 +368,6 @@ const ChatPage: React.FC = () => {
                 />
             }
         >
-            {/* Modals */}
-            {isSettingsOpen && (
-                <SettingsModal
-                    onClose={() => {
-                        setIsSettingsOpen(false);
-                        // Đóng modal xong thì refetch avatar — nếu vừa đổi ảnh
-                        // đại diện, SidebarPrimary sẽ cập nhật ngay không cần
-                        // đăng nhập lại
-                        fetchMyAvatar();
-                    }}
-                />
-            )}
-            {isCreateGroupOpen && (
-                <CreateGroupModal
-                    onClose={() => setIsCreateGroupOpen(false)}
-                    onSuccess={handleGroupCreated}
-                />
-            )}
-            {isCreatePrivateOpen && (
-                <CreatePrivateChatModal
-                    onClose={() => setIsCreatePrivateOpen(false)}
-                    onSuccess={async (convId) => {
-                        setIsCreatePrivateOpen(false);
-                        await fetchConversations();
-                        navigate("/chat/" + convId);
-                    }}
-                />
-            )}
-
             {/* Sub-routing outlet */}
             <Outlet
                 context={{
@@ -425,6 +396,38 @@ const ChatPage: React.FC = () => {
                 }}
             />
         </ChatLayout>
+
+        {/* Modals — render NGOÀI ChatLayout để tránh bị ẩn bởi mobile layout.
+            Trước đây nằm bên trong <ChatLayout> → bên trong <main> có class
+            'hidden md:flex' khi showDetail=false → modals bị hidden trên mobile
+            dù z-index cao (vì parent element hidden = toàn bộ subtree ẩn). */}
+        {isSettingsOpen && (
+            <SettingsModal
+                onClose={() => {
+                    setIsSettingsOpen(false);
+                    // Đóng modal xong thì refetch avatar — nếu vừa đổi ảnh
+                    // đại diện, SidebarPrimary sẽ cập nhật ngay không cần
+                    // đăng nhập lại
+                    fetchMyAvatar();
+                }}
+            />
+        )}
+        {isCreateGroupOpen && (
+            <CreateGroupModal
+                onClose={() => setIsCreateGroupOpen(false)}
+                onSuccess={handleGroupCreated}
+            />
+        )}
+        {isCreatePrivateOpen && (
+            <CreatePrivateChatModal
+                onClose={() => setIsCreatePrivateOpen(false)}
+                onSuccess={async (convId) => {
+                    setIsCreatePrivateOpen(false);
+                    await fetchConversations();
+                    navigate("/chat/" + convId);
+                }}
+            />
+        )}
 
         {/* 1-1 Call Modal */}
         {callModal !== null && (
