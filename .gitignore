@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment variables — không commit file .env thật (chứa config
+# riêng từng máy/môi trường). File .env.example vẫn được commit
+# làm template cho team.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
